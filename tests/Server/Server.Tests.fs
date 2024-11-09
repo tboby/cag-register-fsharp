@@ -19,19 +19,18 @@ let server =
     ]
 
 let excel = testList "Excel" [
-     testCase "Excel extraction returns applications"
-        <| fun _ ->
-            let applications = CagRegisterXLSM.getApplications()
-            
-            // Should return some applications
-            Expect.isGreaterThan applications.Length 0 "Should find some applications"
-            
-            // Each application should have a number and worksheet
-            applications |> List.iter (fun (appNo, sheet) ->
-                Expect.isTrue (not (System.String.IsNullOrWhiteSpace(appNo))) "Application number should not be empty"
-                Expect.isNotNull sheet "Worksheet should exist"
-                Expect.equal sheet.Name ("A" + appNo) "Sheet name should match application number"
-            )
+    testCase "Can parse application details"
+    <| fun _ ->
+        let applications = CagRegisterXLSM.getApplicationDetails()
+
+        // Should return some applications
+        Expect.isGreaterThan applications.Length 0 "Should parse some applications"
+
+        // Test first application has required fields
+        let firstApp = applications.[0]
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstApp.ApplicationNumber))) "Should have application number"
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstApp.Title))) "Should have title"
+        Expect.isTrue (firstApp.Address.Length > 0) "Should have address"
 ]
 
 [<Tests>]

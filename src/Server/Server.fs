@@ -3,6 +3,7 @@ module Server
 open SAFE
 open Saturn
 open Shared
+open OfficeOpenXml // Ensure you have this for EPPlus
 
 // CAG Application Types
 [<RequireQualifiedAccess>]
@@ -62,14 +63,14 @@ module CagRegisterXLSM =
     open System.IO
     open ClosedXML.Excel
 
-    let getApplications(workbook: XLWorkbook) =
-        let indexSheet = workbook.Worksheet("Index")
+    let getApplications(workbook: ExcelPackage) =
+        let indexSheet = workbook.Workbook.Worksheets.[0] // Access the first worksheet
 
         // Get first 20 application numbers from Index sheet
         let applications =
             [2..21] // Row 1 is header, get next 20 rows
             |> List.map (fun row ->
-                let appNo = indexSheet.Cell(row, 1).GetString()
+                let appNo = indexSheet.Cells.[sprintf "A%d" row].Text // Use string format for cell access
                 appNo
             )
             |> List.filter (fun appNo -> not (System.String.IsNullOrWhiteSpace(appNo)))
@@ -80,7 +81,7 @@ module CagRegisterXLSM =
             |> List.map (fun appNo ->
                 let sheetName = "A" + appNo
                 try
-                    let sheet = workbook.Worksheet(sheetName)
+                    let sheet = workbook.Workbook.Worksheets.[sheetName] // Access the application sheet
                     Some (appNo, sheet)
                 with
                 | _ -> None
@@ -89,72 +90,72 @@ module CagRegisterXLSM =
 
         appSheets
 
-    let parseMedicalPurposes (sheet: IXLWorksheet) =
+    let parseMedicalPurposes (sheet: ExcelWorksheet) =
         [
-            if sheet.Cell("B18").GetString().Contains("Y") then MedicalPurpose.MedicalResearch
-            if sheet.Cell("B16").GetString().Contains("Y") then MedicalPurpose.PreventativeMedicine
-            if sheet.Cell("B17").GetString().Contains("Y") then MedicalPurpose.MedicalDiagnosis
-            if sheet.Cell("B19").GetString().Contains("Y") then MedicalPurpose.CareAndTreatment
-            if sheet.Cell("B20").GetString().Contains("Y") then MedicalPurpose.HealthAndSocialCareManagement
-            if sheet.Cell("B21").GetString().Contains("Y") then MedicalPurpose.InformingIndividuals
+            if sheet.Cells.["B18"].Text.Contains("Y") then MedicalPurpose.MedicalResearch
+            if sheet.Cells.["B16"].Text.Contains("Y") then MedicalPurpose.PreventativeMedicine
+            if sheet.Cells.["B17"].Text.Contains("Y") then MedicalPurpose.MedicalDiagnosis
+            if sheet.Cells.["B19"].Text.Contains("Y") then MedicalPurpose.CareAndTreatment
+            if sheet.Cells.["B20"].Text.Contains("Y") then MedicalPurpose.HealthAndSocialCareManagement
+            if sheet.Cells.["B21"].Text.Contains("Y") then MedicalPurpose.InformingIndividuals
         ]
 
-    let parseS251Classes (sheet: IXLWorksheet) =
+    let parseS251Classes (sheet: ExcelWorksheet) =
         [
-            if sheet.Cell("B24").GetString().Contains("Y") then S251Class.SpecificSupport
-            if sheet.Cell("B25").GetString().Contains("Y") then S251Class.ClassI_Identifiability
-            if sheet.Cell("B26").GetString().Contains("Y") then S251Class.ClassII_GeographicalLocation
-            if sheet.Cell("B27").GetString().Contains("Y") then S251Class.ClassIII_IdentifyAndContact
-            if sheet.Cell("B28").GetString().Contains("Y") then S251Class.ClassIV_LinkingMultipleSources
-            if sheet.Cell("B29").GetString().Contains("Y") then S251Class.ClassV_AuditAndMonitoring
-            if sheet.Cell("B30").GetString().Contains("Y") then S251Class.ClassVI_GrantingAccess
+            if sheet.Cells.["B24"].Text.Contains("Y") then S251Class.SpecificSupport
+            if sheet.Cells.["B25"].Text.Contains("Y") then S251Class.ClassI_Identifiability
+            if sheet.Cells.["B26"].Text.Contains("Y") then S251Class.ClassII_GeographicalLocation
+            if sheet.Cells.["B27"].Text.Contains("Y") then S251Class.ClassIII_IdentifyAndContact
+            if sheet.Cells.["B28"].Text.Contains("Y") then S251Class.ClassIV_LinkingMultipleSources
+            if sheet.Cells.["B29"].Text.Contains("Y") then S251Class.ClassV_AuditAndMonitoring
+            if sheet.Cells.["B30"].Text.Contains("Y") then S251Class.ClassVI_GrantingAccess
         ]
 
-    let parseApplication (sheet: IXLWorksheet) =
+    let parseApplication (sheet: ExcelWorksheet) =
         try
             let app = {
-                ApplicationNumber = sheet.Cell("B3").GetString()
-                Reference = sheet.Cell("B4").GetString()
+                ApplicationNumber = sheet.Cells.["B3"].Text // Use string access
+                Reference = sheet.Cells.["B4"].Text // Use string access
                 OtherRefs =
-                    let refs = sheet.Cell("B5").GetString()
+                    let refs = sheet.Cells.["B5"].Text // Use string access
                     if System.String.IsNullOrWhiteSpace(refs) then None else Some refs
-                Title = sheet.Cell("B6").GetString()
-                Summary = sheet.Cell("B7").GetString()
-                ApplicantOrganisation = sheet.Cell("B8").GetString()
-                ContactName = sheet.Cell("B9").GetString()
+                Title = sheet.Cells.["B6"].Text // Use string access
+                Summary = sheet.Cells.["B7"].Text // Use string access
+                ApplicantOrganisation = sheet.Cells.["B8"].Text // Use string access
+                ContactName = sheet.Cells.["B9"].Text // Use string access
                 Address =
                     [
-                        sheet.Cell("B10").GetString()
-                        sheet.Cell("B11").GetString()
-                        sheet.Cell("B12").GetString()
+                        sheet.Cells.["B10"].Text // Use string access
+                        sheet.Cells.["B11"].Text // Use string access
+                        sheet.Cells.["B12"].Text // Use string access
                     ] |> List.filter (not << System.String.IsNullOrWhiteSpace)
-                Postcode = sheet.Cell("B13").GetString()
-                Telephone = sheet.Cell("B14").GetString()
-                Email = sheet.Cell("B15").GetString()
+                Postcode = sheet.Cells.["B13"].Text // Use string access
+                Telephone = sheet.Cells.["B14"].Text // Use string access
+                Email = sheet.Cells.["B15"].Text // Use string access
                 MedicalPurposes = parseMedicalPurposes sheet
-                CohortDescription = sheet.Cell("B22").GetString()
-                ConfidentialInfo = sheet.Cell("B23").GetString()
+                CohortDescription = sheet.Cells.["B22"].Text // Use string access
+                ConfidentialInfo = sheet.Cells.["B23"].Text // Use string access
                 S251Classes = parseS251Classes sheet
-                Sponsor = sheet.Cell("B31").GetString()
-                Status = sheet.Cell("B32").GetString()
+                Sponsor = sheet.Cells.["B31"].Text // Use string access
+                Status = sheet.Cells.["B32"].Text // Use string access
                 OutcomeDate =
-                    try Some(sheet.Cell("B34").GetDateTime())
+                    try Some(sheet.Cells.["B34"].GetValue<System.DateTime>()) // Use string access
                     with _ -> None
                 NextReviewDate =
-                    try Some(sheet.Cell("B35").GetDateTime())
+                    try Some(sheet.Cells.["B35"].GetValue<System.DateTime>()) // Use string access
                     with _ -> None
-                Notes = sheet.Cell("B36").GetString()
+                Notes = sheet.Cells.["B36"].Text // Use string access
                 NDOO =
-                    let value = sheet.Cell("B37").GetString()
+                    let value = sheet.Cells.["B37"].Text // Use string access
                     if System.String.IsNullOrWhiteSpace(value) then None else Some value
                 EnglishCPI =
-                    let value = sheet.Cell("B38").GetString()
+                    let value = sheet.Cells.["B38"].Text // Use string access
                     if System.String.IsNullOrWhiteSpace(value) then None
                     else if value = "Yes" then Some CPIValue.Yes
                     else if value = "No" then Some CPIValue.No
                     else Some (CPIValue.Other value)
                 WelshCPI =
-                    let value = sheet.Cell("B39").GetString()
+                    let value = sheet.Cells.["B39"].Text // Use string access
                     if System.String.IsNullOrWhiteSpace(value) then None
                     else if value = "Yes" then Some CPIValue.Yes
                     else if value = "No" then Some CPIValue.No
@@ -166,8 +167,8 @@ module CagRegisterXLSM =
             None
 
     let getApplicationDetails() =
-        use workbook = new XLWorkbook(cagRegisterFile) // Ensure workbook is disposed after all operations
-        let applications = getApplications(workbook)
+        use package = new ExcelPackage(new FileInfo(cagRegisterFile)) // Change to EPPlus syntax
+        let applications = getApplications(package)
         applications
         |> List.choose (fun (appNo, sheet) ->
             parseApplication sheet
@@ -210,5 +211,6 @@ let app = application {
 
 [<EntryPoint>]
 let main _ =
+    ExcelPackage.LicenseContext <- LicenseContext.NonCommercial // Set the license context
     run app
     0

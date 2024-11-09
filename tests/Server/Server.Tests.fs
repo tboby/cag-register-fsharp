@@ -5,6 +5,8 @@ open Expecto
 open Shared
 open Server
 
+open OfficeOpenXml // Ensure you have this for EPPlus
+do ExcelPackage.LicenseContext <- LicenseContext.NonCommercial // Set the license context
 let server =
     testList "Server" [
         testCase "Adding valid Todo"

@@ -3,6 +3,7 @@ framework: net8.0
 storage: none
 
 nuget ClosedXML
+nuget EPPlus
 nuget Expecto ~> 9
 nuget Microsoft.NET.Test.Sdk
 nuget SAFE.Server ~> 5

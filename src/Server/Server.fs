@@ -66,9 +66,9 @@ module CagRegisterXLSM =
     let getApplications(workbook: ExcelPackage) =
         let indexSheet = workbook.Workbook.Worksheets.[0] // Access the first worksheet
 
-        // Get first 20 application numbers from Index sheet
+        // Get all application numbers from Index sheet
         let applications =
-            [2..21] // Row 1 is header, get next 20 rows
+            [2..indexSheet.Dimension.End.Row] // Change to get all rows dynamically
             |> List.map (fun row ->
                 let appNo = indexSheet.Cells.[sprintf "A%d" row].Text // Use string format for cell access
                 appNo
@@ -169,10 +169,19 @@ module CagRegisterXLSM =
     let getApplicationDetails() =
         use package = new ExcelPackage(new FileInfo(cagRegisterFile)) // Change to EPPlus syntax
         let applications = getApplications(package)
-        applications
-        |> List.choose (fun (appNo, sheet) ->
-            parseApplication sheet
-        )
+
+        // Read application details in parallel
+        let tasks =
+            applications
+            |> List.map (fun (appNo, sheet) ->
+                async {
+                    return parseApplication sheet
+                }
+            )
+
+        // Run tasks in parallel and collect results
+        let results = Async.Parallel tasks |> Async.RunSynchronously
+        results |> Array.choose id |> List.ofArray // Filter out None values
 
 module Storage =
     let todos =

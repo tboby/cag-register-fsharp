@@ -58,10 +58,20 @@ let excel = testList "Excel" [
             applications
             |> List.collect (fun app -> app.S251ClassRawValues |> List.map (fun s251 -> s251, app.ApplicationNumber))
             |> List.distinctBy fst
+        let allMedicalPurposesNotChecked =
+            applications
+            |> List.collect (fun app -> app.MedicalPurposesRawValuesNotChecked |> List.map (fun mp -> mp, app.ApplicationNumber))
+            |> List.distinctBy fst
+        let allS251ClassesNotChecked =
+            applications
+            |> List.collect (fun app -> app.S251ClassRawValuesNotChecked |> List.map (fun s251 -> s251, app.ApplicationNumber))
+            |> List.distinctBy fst
 
         // Output the results (you can replace this with any assertion or logging as needed)
         printfn "All Medical Purposes: %A" allMedicalPurposes
         printfn "All S251 Classes: %A" allS251Classes
+        printfn "All Medical Purposes Not Checked: %A" allMedicalPurposesNotChecked
+        printfn "All S251 Classes Not Checked: %A" allS251ClassesNotChecked
 ]
 
 [<Tests>]

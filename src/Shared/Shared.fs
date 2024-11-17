@@ -57,10 +57,12 @@ type CagApplication = {
     Email: string
     MedicalPurposes: Set<MedicalPurpose>
     MedicalPurposesRawValues: string list
+    MedicalPurposesRawValuesNotChecked: string list
     CohortDescription: string
     ConfidentialInfo: string
     S251Classes: Set<S251Class>
     S251ClassRawValues: string list
+    S251ClassRawValuesNotChecked: string list
     Sponsor: string
     Status: string
     OutcomeDate: System.DateTime option

@@ -55,10 +55,12 @@ type CagApplication = {
     Postcode: string
     Telephone: string
     Email: string
-    MedicalPurposes: MedicalPurpose list
+    MedicalPurposes: Set<MedicalPurpose>
+    MedicalPurposesRawValues: string list
     CohortDescription: string
     ConfidentialInfo: string
-    S251Classes: S251Class list
+    S251Classes: Set<S251Class>
+    S251ClassRawValues: string list
     Sponsor: string
     Status: string
     OutcomeDate: System.DateTime option

@@ -105,6 +105,149 @@ module ViewComponents =
                             ]
                         ]
                         Html.div [
+                            prop.children [
+                                Html.strong "Contact Name: "
+                                Html.span app.ContactName
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Address: "
+                                Html.span (String.concat ", " app.Address)
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Postcode: "
+                                Html.span app.Postcode
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Telephone: "
+                                Html.span app.Telephone
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Email: "
+                                Html.span app.Email
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Other References: "
+                                Html.span (Option.defaultValue "N/A" app.OtherRefs)
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Medical Purposes: "
+                                Html.div [
+                                    let allMedicalPurposes = [
+                                        MedicalPurpose.MedicalResearch
+                                        MedicalPurpose.PreventativeMedicine
+                                        MedicalPurpose.MedicalDiagnosis
+                                        MedicalPurpose.CareAndTreatment
+                                        MedicalPurpose.HealthAndSocialCareManagement
+                                        MedicalPurpose.InformingIndividuals
+                                    ]
+                                    for purpose in allMedicalPurposes do
+                                        Html.label [
+                                            prop.children [
+                                                Html.input [
+                                                    prop.type' "checkbox"
+                                                    prop.isChecked (app.MedicalPurposes.Contains purpose)
+                                                    prop.disabled true
+                                                ]
+                                                Html.span (string purpose)
+                                            ]
+                                        ]
+                                ]
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Cohort Description: "
+                                Html.span app.CohortDescription
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Confidential Info: "
+                                Html.span app.ConfidentialInfo
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "S251 Classes: "
+                                Html.div [
+                                    let allS251Classes = [
+                                        S251Class.SpecificSupport
+                                        S251Class.ClassI_Identifiability
+                                        S251Class.ClassII_GeographicalLocation
+                                        S251Class.ClassIII_IdentifyAndContact
+                                        S251Class.ClassIV_LinkingMultipleSources
+                                        S251Class.ClassV_AuditAndMonitoring
+                                        S251Class.ClassVI_GrantingAccess
+                                    ]
+                                    for s251Class in allS251Classes do
+                                        Html.label [
+                                            prop.children [
+                                                Html.input [
+                                                    prop.type' "checkbox"
+                                                    prop.isChecked (app.S251Classes.Contains s251Class)
+                                                    prop.disabled true
+                                                ]
+                                                Html.span (string s251Class)
+                                            ]
+                                        ]
+                                ]
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Sponsor: "
+                                Html.span app.Sponsor
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Outcome Date: "
+                                Html.span (Option.defaultValue "N/A" (Option.map string app.OutcomeDate))
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Next Review Date: "
+                                Html.span (Option.defaultValue "N/A" (Option.map string app.NextReviewDate))
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Notes: "
+                                Html.span app.Notes
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "NDOO: "
+                                Html.span (Option.defaultValue "N/A" app.NDOO)
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "English CPI: "
+                                Html.span (Option.defaultValue "N/A" (Option.map string app.EnglishCPI))
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Welsh CPI: "
+                                Html.span (Option.defaultValue "N/A" (Option.map string app.WelshCPI))
+                            ]
+                        ]
+                        Html.div [
                             prop.className "col-span-2"
                             prop.children [
                                 Html.strong "Summary: "

@@ -40,26 +40,48 @@ module CagRegisterXLSM =
         appSheets
 
     let parseMedicalPurposes (sheet: ExcelWorksheet) =
-        [
-            if sheet.Cells.["B18"].Text.Contains("Y") then MedicalPurpose.MedicalResearch
-            if sheet.Cells.["B16"].Text.Contains("Y") then MedicalPurpose.PreventativeMedicine
-            if sheet.Cells.["B17"].Text.Contains("Y") then MedicalPurpose.MedicalDiagnosis
-            if sheet.Cells.["B19"].Text.Contains("Y") then MedicalPurpose.CareAndTreatment
-            if sheet.Cells.["B20"].Text.Contains("Y") then MedicalPurpose.HealthAndSocialCareManagement
-            if sheet.Cells.["B21"].Text.Contains("Y") then MedicalPurpose.InformingIndividuals
-        ]
+        let validValues = Set.ofList ["Y"; "X"; "y"; "x"]
+        let purposes =
+            let addPurposeIfContainsYorX cellRef purpose =
+                let cellText = sheet.Cells.[cellRef].Text.Trim()
+                let purposeValue = if validValues |> Set.contains cellText then Some purpose else None
+                (purposeValue, cellText)
+            [
+                addPurposeIfContainsYorX "B18" MedicalPurpose.MedicalResearch
+                addPurposeIfContainsYorX "B16" MedicalPurpose.PreventativeMedicine
+                addPurposeIfContainsYorX "B17" MedicalPurpose.MedicalDiagnosis
+                addPurposeIfContainsYorX "B19" MedicalPurpose.CareAndTreatment
+                addPurposeIfContainsYorX "B20" MedicalPurpose.HealthAndSocialCareManagement
+                addPurposeIfContainsYorX "B21" MedicalPurpose.InformingIndividuals
+            ]
+            |> fun purposes ->
+                let actualValues = Set.ofList (List.map (fun (purposeValue, _) -> purposeValue) purposes |> List.filter Option.isSome |> List.map Option.get)
+                let rawValues = List.map (fun (_, rawValue) -> rawValue) purposes
+                (actualValues, rawValues)
 
+        purposes
     let parseS251Classes (sheet: ExcelWorksheet) =
-        [
-            if sheet.Cells.["B24"].Text.Contains("Y") then S251Class.SpecificSupport
-            if sheet.Cells.["B25"].Text.Contains("Y") then S251Class.ClassI_Identifiability
-            if sheet.Cells.["B26"].Text.Contains("Y") then S251Class.ClassII_GeographicalLocation
-            if sheet.Cells.["B27"].Text.Contains("Y") then S251Class.ClassIII_IdentifyAndContact
-            if sheet.Cells.["B28"].Text.Contains("Y") then S251Class.ClassIV_LinkingMultipleSources
-            if sheet.Cells.["B29"].Text.Contains("Y") then S251Class.ClassV_AuditAndMonitoring
-            if sheet.Cells.["B30"].Text.Contains("Y") then S251Class.ClassVI_GrantingAccess
-        ]
+        let validValues = Set.ofList ["Y"; "X"; "y"; "x"]
+        let classes =
+            let addClassIfContainsYorX cellRef s251Class =
+                let cellText = sheet.Cells.[cellRef].Text.Trim()
+                let classValue = if validValues |> Set.contains cellText then Some s251Class else None
+                (classValue, cellText)
+            [
+                addClassIfContainsYorX "B24" S251Class.SpecificSupport
+                addClassIfContainsYorX "B25" S251Class.ClassI_Identifiability
+                addClassIfContainsYorX "B26" S251Class.ClassII_GeographicalLocation
+                addClassIfContainsYorX "B27" S251Class.ClassIII_IdentifyAndContact
+                addClassIfContainsYorX "B28" S251Class.ClassIV_LinkingMultipleSources
+                addClassIfContainsYorX "B29" S251Class.ClassV_AuditAndMonitoring
+                addClassIfContainsYorX "B30" S251Class.ClassVI_GrantingAccess
+            ]
+            |> fun classes ->
+                let actualValues = Set.ofList (List.map (fun (classValue, _) -> classValue) classes |> List.filter Option.isSome |> List.map Option.get)
+                let rawValues = List.map (fun (_, rawValue) -> rawValue) classes
+                (actualValues, rawValues)
 
+        classes
     let parseApplication (sheet: ExcelWorksheet) =
         try
             let app = {
@@ -81,10 +103,12 @@ module CagRegisterXLSM =
                 Postcode = sheet.Cells.["B13"].Text // Use string access
                 Telephone = sheet.Cells.["B14"].Text // Use string access
                 Email = sheet.Cells.["B15"].Text // Use string access
-                MedicalPurposes = parseMedicalPurposes sheet
+                MedicalPurposes = parseMedicalPurposes sheet |> fst // Corrected to use only the first part of the tuple
+                MedicalPurposesRawValues = parseMedicalPurposes sheet |> snd // Added to include raw values
                 CohortDescription = sheet.Cells.["B22"].Text // Use string access
                 ConfidentialInfo = sheet.Cells.["B23"].Text // Use string access
-                S251Classes = parseS251Classes sheet
+                S251Classes = parseS251Classes sheet |> fst // Corrected to use only the first part of the tuple
+                S251ClassRawValues = parseS251Classes sheet |> snd // Added to include raw values
                 Sponsor = sheet.Cells.["B31"].Text // Use string access
                 Status = sheet.Cells.["B32"].Text // Use string access
                 OutcomeDate =

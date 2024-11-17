@@ -5,58 +5,7 @@ open Saturn
 open Shared
 open OfficeOpenXml // Ensure you have this for EPPlus
 
-// CAG Application Types
-[<RequireQualifiedAccess>]
-type MedicalPurpose =
-    | PreventativeMedicine
-    | MedicalDiagnosis
-    | MedicalResearch
-    | CareAndTreatment
-    | HealthAndSocialCareManagement
-    | InformingIndividuals
 
-[<RequireQualifiedAccess>]
-type S251Class =
-    | SpecificSupport
-    | ClassI_Identifiability
-    | ClassII_GeographicalLocation
-    | ClassIII_IdentifyAndContact
-    | ClassIV_LinkingMultipleSources
-    | ClassV_AuditAndMonitoring
-    | ClassVI_GrantingAccess
-
-// Define a new discriminated union for CPI values
-[<RequireQualifiedAccess>]
-type CPIValue =
-    | Yes
-    | No
-    | Other of string
-
-type CagApplication = {
-    ApplicationNumber: string
-    Reference: string
-    OtherRefs: string option
-    Title: string
-    Summary: string
-    ApplicantOrganisation: string
-    ContactName: string
-    Address: string list // Multiple address lines
-    Postcode: string
-    Telephone: string
-    Email: string
-    MedicalPurposes: MedicalPurpose list
-    CohortDescription: string
-    ConfidentialInfo: string
-    S251Classes: S251Class list
-    Sponsor: string
-    Status: string
-    OutcomeDate: System.DateTime option
-    NextReviewDate: System.DateTime option
-    Notes: string
-    NDOO: string option
-    EnglishCPI: CPIValue option
-    WelshCPI: CPIValue option
-}
 
 module CagRegisterXLSM =
     let cagRegisterFile = "cag-register-research-master-2021_1uhwQyX.xlsm"
@@ -209,10 +158,20 @@ let todosApi ctx = {
         }
 }
 
-let webApp = Api.make todosApi
+let applicationsApi ctx = {
+    getApplications = fun () -> async {
+        return CagRegisterXLSM.getApplicationDetails()
+    }
+}
+
+let webApp =
+    router {
+        forward "/todos" (Api.make todosApi)
+        forward "/ICagApplicationsApi" (Api.make applicationsApi)
+    }
 
 let app = application {
-    use_router webApp
+    use_router (Api.make applicationsApi)
     memory_cache
     use_static "public"
     use_gzip

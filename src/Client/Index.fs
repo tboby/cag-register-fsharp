@@ -3,122 +3,152 @@ module Index
 open Elmish
 open SAFE
 open Shared
+open Feliz
 
 type Model = {
-    Todos: RemoteData<Todo list>
-    Input: string
+    Applications: RemoteData<CagApplication list>
+    SelectedApplication: CagApplication option
 }
 
 type Msg =
-    | SetInput of string
-    | LoadTodos of ApiCall<unit, Todo list>
-    | SaveTodo of ApiCall<string, Todo>
+    | LoadApplications of ApiCall<unit, CagApplication list>
+    | SelectApplication of CagApplication
 
-let todosApi = Api.makeProxy<ITodosApi> ()
-
+let applicationsApi =
+    Api.makeProxy<ICagApplicationsApi> ()
 let init () =
-    let initialModel = { Todos = NotStarted; Input = "" }
-    let initialCmd = LoadTodos(Start()) |> Cmd.ofMsg
-
-    initialModel, initialCmd
+    let model = { Applications = NotStarted; SelectedApplication = None }
+    let cmd = LoadApplications(Start()) |> Cmd.ofMsg
+    model, cmd
 
 let update msg model =
     match msg with
-    | SetInput value -> { model with Input = value }, Cmd.none
-    | LoadTodos msg ->
+    | LoadApplications msg ->
         match msg with
-        | Start() ->
-            let loadTodosCmd = Cmd.OfAsync.perform todosApi.getTodos () (Finished >> LoadTodos)
-
-            { model with Todos = Loading }, loadTodosCmd
-        | Finished todos -> { model with Todos = Loaded todos }, Cmd.none
-    | SaveTodo msg ->
-        match msg with
-        | Start todoText ->
-            let saveTodoCmd =
-                let todo = Todo.create todoText
-                Cmd.OfAsync.perform todosApi.addTodo todo (Finished >> SaveTodo)
-
-            { model with Input = "" }, saveTodoCmd
-        | Finished todo ->
-            {
-                model with
-                    Todos = model.Todos |> RemoteData.map (fun todos -> todos @ [ todo ])
-            },
-            Cmd.none
-
-open Feliz
+        | Start () ->
+            let cmd = Cmd.OfAsync.perform applicationsApi.getApplications () (Finished >> LoadApplications)
+            { model with Applications = Loading }, cmd
+        | Finished apps ->
+            { model with Applications = Loaded apps }, Cmd.none
+    | SelectApplication app ->
+        { model with SelectedApplication = Some app }, Cmd.none
 
 module ViewComponents =
-    let todoAction model dispatch =
+    let applicationList (apps: CagApplication list) dispatch =
         Html.div [
-            prop.className "flex flex-col sm:flex-row mt-4 gap-4"
+            prop.className "bg-white/80 rounded-md shadow-md p-4 w-full"
             prop.children [
-                Html.input [
-                    prop.className
-                        "shadow appearance-none border rounded w-full py-2 px-3 outline-none focus:ring-2 ring-teal-300 text-grey-darker"
-                    prop.value model.Input
-                    prop.placeholder "What needs to be done?"
-                    prop.autoFocus true
-                    prop.onChange (SetInput >> dispatch)
-                    prop.onKeyPress (fun ev ->
-                        if ev.key = "Enter" then
-                            dispatch (SaveTodo(Start model.Input)))
-                ]
-                Html.button [
-                    prop.className
-                        "flex-no-shrink p-2 px-12 rounded bg-teal-600 outline-none focus:ring-2 ring-teal-300 font-bold text-white hover:bg-teal disabled:opacity-30 disabled:cursor-not-allowed"
-                    prop.disabled (Todo.isValid model.Input |> not)
-                    prop.onClick (fun _ -> dispatch (SaveTodo(Start model.Input)))
-                    prop.text "Add"
+                Html.div [
+                    prop.className "grid grid-cols-1 gap-4"
+                    prop.children [
+                        for app in apps do
+                            Html.div [
+                                prop.className "p-4 border rounded hover:bg-gray-100 cursor-pointer"
+                                prop.onClick (fun _ -> dispatch (SelectApplication app))
+                                prop.children [
+                                    Html.h3 [
+                                        prop.className "font-bold"
+                                        prop.text app.Title
+                                    ]
+                                    Html.div [
+                                        prop.className "text-sm text-gray-600"
+                                        prop.children [
+                                            Html.span [
+                                                prop.className "mr-2"
+                                                prop.text (sprintf "App #%s" app.ApplicationNumber)
+                                            ]
+                                            Html.span [
+                                                prop.text (sprintf "Status: %s" app.Status)
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                    ]
                 ]
             ]
         ]
 
-    let todoList model dispatch =
+    let applicationDetail (app: CagApplication) =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4 w-5/6 lg:w-3/4 lg:max-w-2xl"
+            prop.className "bg-white/80 rounded-md shadow-md p-4 w-full"
             prop.children [
-                Html.ol [
-                    prop.className "list-decimal ml-6"
+                Html.h2 [
+                    prop.className "text-2xl font-bold mb-4"
+                    prop.text app.Title
+                ]
+                Html.div [
+                    prop.className "grid grid-cols-2 gap-4"
                     prop.children [
-                        match model.Todos with
-                        | NotStarted -> Html.text "Not Started."
-                        | Loading -> Html.text "Loading..."
-                        | Loaded todos ->
-                            for todo in todos do
-                                Html.li [ prop.className "my-1"; prop.text todo.Description ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Application Number: "
+                                Html.span app.ApplicationNumber
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Reference: "
+                                Html.span app.Reference
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Organisation: "
+                                Html.span app.ApplicantOrganisation
+                            ]
+                        ]
+                        Html.div [
+                            prop.children [
+                                Html.strong "Status: "
+                                Html.span app.Status
+                            ]
+                        ]
+                        Html.div [
+                            prop.className "col-span-2"
+                            prop.children [
+                                Html.strong "Summary: "
+                                Html.p app.Summary
+                            ]
+                        ]
                     ]
                 ]
-
-                todoAction model dispatch
             ]
         ]
 
 let view model dispatch =
     Html.section [
-        prop.className "h-screen w-screen"
+        prop.className "h-screen w-screen overflow-auto"
         prop.style [
             style.backgroundSize "cover"
             style.backgroundImageUrl "https://unsplash.it/1200/900?random"
             style.backgroundPosition "no-repeat center center fixed"
         ]
-
         prop.children [
-            Html.a [
-                prop.href "https://safe-stack.github.io/"
-                prop.className "absolute block ml-12 h-12 w-12 bg-teal-300 hover:cursor-pointer hover:bg-teal-400"
-                prop.children [ Html.img [ prop.src "/favicon.png"; prop.alt "Logo" ] ]
-            ]
-
             Html.div [
-                prop.className "flex flex-col items-center justify-center h-full"
+                prop.className "container mx-auto px-4 py-8"
                 prop.children [
                     Html.h1 [
-                        prop.className "text-center text-5xl font-bold text-white mb-3 rounded-md p-4"
-                        prop.text "cag_register_fsharp"
+                        prop.className "text-center text-5xl font-bold text-white mb-8"
+                        prop.text "CAG Register"
                     ]
-                    ViewComponents.todoList model dispatch
+                    Html.div [
+                        prop.className "grid grid-cols-1 md:grid-cols-2 gap-8"
+                        prop.children [
+                            match model.Applications with
+                            | NotStarted -> Html.text "Loading..."
+                            | Loading -> Html.text "Loading applications..."
+                            | Loaded apps ->
+                                ViewComponents.applicationList apps dispatch
+                                match model.SelectedApplication with
+                                | Some app -> ViewComponents.applicationDetail app
+                                | None ->
+                                    Html.div [
+                                        prop.className "bg-white/80 rounded-md shadow-md p-4"
+                                        prop.text "Select an application to view details"
+                                    ]
+                        ]
+                    ]
                 ]
             ]
         ]

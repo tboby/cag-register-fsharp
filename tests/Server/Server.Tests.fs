@@ -66,12 +66,17 @@ let excel = testList "Excel" [
             applications
             |> List.collect (fun app -> app.S251ClassRawValuesNotChecked |> List.map (fun s251 -> s251, app.ApplicationNumber))
             |> List.distinctBy fst
+        let allCPIOtherValues =
+            applications
+            |> List.collect (fun app -> app.WelshCPI |> function | Some (CPIValue.Other x) -> [x] | _ -> [])
+            |> List.distinct
 
         // Output the results (you can replace this with any assertion or logging as needed)
         printfn "All Medical Purposes: %A" allMedicalPurposes
         printfn "All S251 Classes: %A" allS251Classes
         printfn "All Medical Purposes Not Checked: %A" allMedicalPurposesNotChecked
         printfn "All S251 Classes Not Checked: %A" allS251ClassesNotChecked
+        printfn "All CPI Other Values: %A" allCPIOtherValues
 ]
 
 [<Tests>]

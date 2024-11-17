@@ -141,28 +141,35 @@ module ViewComponents =
                             ]
                         ]
                         Html.div [
+                            prop.className "grid grid-cols-2 gap-4"
                             prop.children [
-                                Html.strong "Medical Purposes: "
                                 Html.div [
-                                    let allMedicalPurposes = [
-                                        MedicalPurpose.MedicalResearch
-                                        MedicalPurpose.PreventativeMedicine
-                                        MedicalPurpose.MedicalDiagnosis
-                                        MedicalPurpose.CareAndTreatment
-                                        MedicalPurpose.HealthAndSocialCareManagement
-                                        MedicalPurpose.InformingIndividuals
-                                    ]
-                                    for purpose in allMedicalPurposes do
-                                        Html.label [
-                                            prop.children [
-                                                Html.input [
-                                                    prop.type' "checkbox"
-                                                    prop.isChecked (app.MedicalPurposes.Contains purpose)
-                                                    prop.disabled true
-                                                ]
-                                                Html.span (string purpose)
+                                    prop.className "col-span-1"
+                                    prop.children [
+                                        Html.strong "Medical Purposes: "
+                                        Html.div [
+                                            let allMedicalPurposes = [
+                                                MedicalPurpose.MedicalResearch
+                                                MedicalPurpose.PreventativeMedicine
+                                                MedicalPurpose.MedicalDiagnosis
+                                                MedicalPurpose.CareAndTreatment
+                                                MedicalPurpose.HealthAndSocialCareManagement
+                                                MedicalPurpose.InformingIndividuals
                                             ]
+                                            for purpose in allMedicalPurposes do
+                                                Html.label [
+                                                    prop.className "flex items-center"
+                                                    prop.children [
+                                                        Html.input [
+                                                            prop.type' "checkbox"
+                                                            prop.isChecked (app.MedicalPurposes.Contains purpose)
+                                                            prop.disabled true
+                                                        ]
+                                                        Html.span (string purpose)
+                                                    ]
+                                                ]
                                         ]
+                                    ]
                                 ]
                             ]
                         ]
@@ -179,29 +186,36 @@ module ViewComponents =
                             ]
                         ]
                         Html.div [
+                            prop.className "grid grid-cols-2 gap-4"
                             prop.children [
-                                Html.strong "S251 Classes: "
                                 Html.div [
-                                    let allS251Classes = [
-                                        S251Class.SpecificSupport
-                                        S251Class.ClassI_Identifiability
-                                        S251Class.ClassII_GeographicalLocation
-                                        S251Class.ClassIII_IdentifyAndContact
-                                        S251Class.ClassIV_LinkingMultipleSources
-                                        S251Class.ClassV_AuditAndMonitoring
-                                        S251Class.ClassVI_GrantingAccess
-                                    ]
-                                    for s251Class in allS251Classes do
-                                        Html.label [
-                                            prop.children [
-                                                Html.input [
-                                                    prop.type' "checkbox"
-                                                    prop.isChecked (app.S251Classes.Contains s251Class)
-                                                    prop.disabled true
-                                                ]
-                                                Html.span (string s251Class)
+                                    prop.className "col-span-1"
+                                    prop.children [
+                                        Html.strong "S251 Classes: "
+                                        Html.div [
+                                            let allS251Classes = [
+                                                S251Class.SpecificSupport
+                                                S251Class.ClassI_Identifiability
+                                                S251Class.ClassII_GeographicalLocation
+                                                S251Class.ClassIII_IdentifyAndContact
+                                                S251Class.ClassIV_LinkingMultipleSources
+                                                S251Class.ClassV_AuditAndMonitoring
+                                                S251Class.ClassVI_GrantingAccess
                                             ]
+                                            for s251Class in allS251Classes do
+                                                Html.label [
+                                                    prop.className "flex items-center"
+                                                    prop.children [
+                                                        Html.input [
+                                                            prop.type' "checkbox"
+                                                            prop.isChecked (app.S251Classes.Contains s251Class)
+                                                            prop.disabled true
+                                                        ]
+                                                        Html.span (string s251Class)
+                                                    ]
+                                                ]
                                         ]
+                                    ]
                                 ]
                             ]
                         ]

@@ -5,19 +5,29 @@ open SAFE
 open Shared
 open Feliz
 
+type View =
+    | TableView
+    | DetailView
+
 type Model = {
     Applications: RemoteData<CagApplication list>
     SelectedApplication: CagApplication option
+    CurrentView: View
 }
 
 type Msg =
     | LoadApplications of ApiCall<unit, CagApplication list>
-    | SelectApplication of CagApplication
+    | SelectApplication of CagApplication option
+    | SetView of View
 
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
 let init () =
-    let model = { Applications = NotStarted; SelectedApplication = None }
+    let model = {
+        Applications = NotStarted
+        SelectedApplication = None
+        CurrentView = TableView
+    }
     let cmd = LoadApplications(Start()) |> Cmd.ofMsg
     model, cmd
 
@@ -30,52 +40,142 @@ let update msg model =
             { model with Applications = Loading }, cmd
         | Finished apps ->
             { model with Applications = Loaded apps }, Cmd.none
-    | SelectApplication app ->
-        { model with SelectedApplication = Some app }, Cmd.none
+    | SelectApplication appOpt ->
+        { model with
+            SelectedApplication = appOpt
+            CurrentView = match appOpt with Some _ -> DetailView | None -> TableView
+        }, Cmd.none
+    | SetView view ->
+        { model with
+            CurrentView = view
+            SelectedApplication = if view = TableView then None else model.SelectedApplication
+        }, Cmd.none
 
 module ViewComponents =
-    let applicationList (apps: CagApplication list) dispatch =
+    let navigationBreadcrumb model dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4 w-full"
+            prop.className "text-sm breadcrumbs p-4 bg-white/80 rounded-md shadow-md mb-4"
+            prop.children [
+                Html.ul [
+                    Html.li [
+                        Html.a [
+                            prop.className (if model.CurrentView = TableView then "font-bold" else "")
+                            prop.onClick (fun _ -> dispatch (SetView TableView))
+                            prop.text "Applications"
+                        ]
+                    ]
+                    match model.SelectedApplication with
+                    | Some app ->
+                        Html.li [
+                            Html.a [
+                                prop.className (if model.CurrentView = DetailView then "font-bold" else "")
+                                prop.text app.Title
+                            ]
+                        ]
+                    | None -> ()
+                ]
+            ]
+        ]
+
+    let applicationTable (apps: CagApplication list) dispatch =
+        Html.div [
+            prop.className "bg-white/80 rounded-md shadow-md p-4"
             prop.children [
                 Html.div [
-                    prop.className "grid grid-cols-1 gap-4"
+                    prop.className "overflow-x-auto"
                     prop.children [
-                        for app in apps do
-                            Html.div [
-                                prop.className "p-4 border rounded hover:bg-gray-100 cursor-pointer"
-                                prop.onClick (fun _ -> dispatch (SelectApplication app))
-                                prop.children [
-                                    Html.h3 [
-                                        prop.className "font-bold"
-                                        prop.text app.Title
-                                    ]
-                                    Html.div [
-                                        prop.className "text-sm text-gray-600"
-                                        prop.children [
-                                            Html.span [
-                                                prop.className "mr-2"
-                                                prop.text (sprintf "App #%s" app.ApplicationNumber)
-                                            ]
-                                            Html.span [
-                                                prop.text (sprintf "Status: %s" app.Status)
-                                            ]
+                        Html.table [
+                            prop.className "table w-full"
+                            prop.children [
+                                Html.thead [
+                                    Html.tr [
+                                        Html.th [
+                                            prop.className "bg-primary/10"
+                                            prop.text "App #"
+                                        ]
+                                        Html.th [
+                                            prop.className "bg-primary/10"
+                                            prop.text "Title"
+                                        ]
+                                        Html.th [
+                                            prop.className "bg-primary/10"
+                                            prop.text "Organisation"
+                                        ]
+                                        Html.th [
+                                            prop.className "bg-primary/10"
+                                            prop.text "Status"
+                                        ]
+                                        Html.th [
+                                            prop.className "bg-primary/10"
+                                            prop.text "Actions"
                                         ]
                                     ]
                                 ]
+                                Html.tbody [
+                                    for app in apps do
+                                        Html.tr [
+                                            prop.className "hover:bg-base-200"
+                                            prop.children [
+                                                Html.td app.ApplicationNumber
+                                                Html.td [
+                                                    Html.div [
+                                                        prop.className "font-medium"
+                                                        prop.text app.Title
+                                                    ]
+                                                    Html.div [
+                                                        prop.className "text-sm text-gray-500"
+                                                        prop.text app.ContactName
+                                                    ]
+                                                ]
+                                                Html.td app.ApplicantOrganisation
+                                                Html.td [
+                                                    Html.div [
+                                                        prop.className (
+                                                            match app.Status.ToLower() with
+                                                            | s when s.Contains("approved") -> "badge badge-success"
+                                                            | s when s.Contains("pending") -> "badge badge-warning"
+                                                            | s when s.Contains("rejected") -> "badge badge-error"
+                                                            | _ -> "badge"
+                                                        )
+                                                        prop.text app.Status
+                                                    ]
+                                                ]
+                                                Html.td [
+                                                    Html.button [
+                                                        prop.className "btn btn-sm btn-primary"
+                                                        prop.onClick (fun _ ->
+                                                            dispatch (SelectApplication (Some app))
+                                                        )
+                                                        prop.text "View Details"
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                ]
                             ]
+                        ]
                     ]
                 ]
             ]
         ]
 
-    let applicationDetail (app: CagApplication) =
+    let applicationDetail (app: CagApplication) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4 w-full"
+            prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn"
             prop.children [
-                Html.h2 [
-                    prop.className "text-2xl font-bold mb-4"
-                    prop.text app.Title
+                Html.div [
+                    prop.className "flex justify-between items-center mb-6"
+                    prop.children [
+                        Html.h2 [
+                            prop.className "text-3xl font-bold"
+                            prop.text app.Title
+                        ]
+                        Html.button [
+                            prop.className "btn btn-outline"
+                            prop.onClick (fun _ -> dispatch (SetView TableView))
+                            prop.text "Back to List"
+                        ]
+                    ]
                 ]
                 Html.div [
                     prop.className "grid grid-cols-2 gap-4"
@@ -275,33 +375,38 @@ module ViewComponents =
 
 let view model dispatch =
     Html.section [
-        prop.className "h-screen w-screen overflow-auto"
-        prop.style [
-            style.backgroundSize "cover"
-            style.backgroundImageUrl "https://unsplash.it/1200/900?random"
-            style.backgroundPosition "no-repeat center center fixed"
-        ]
+        prop.className "min-h-screen w-screen overflow-auto bg-gradient-to-br from-blue-50 to-indigo-100"
         prop.children [
             Html.div [
                 prop.className "container mx-auto px-4 py-8"
                 prop.children [
                     Html.h1 [
-                        prop.className "text-center text-5xl font-bold text-white mb-8"
+                        prop.className "text-center text-5xl font-bold text-gray-800 mb-8"
                         prop.text "CAG Register"
                     ]
+                    ViewComponents.navigationBreadcrumb model dispatch
                     Html.div [
-                        prop.className "grid grid-cols-1 md:grid-cols-2 gap-8"
+                        prop.className "transition-all duration-300 ease-in-out"
                         prop.children [
-                            match model.Applications with
-                            | NotStarted -> Html.text "Loading..."
-                            | Loading -> Html.text "Loading applications..."
-                            | Loaded apps ->
-                                ViewComponents.applicationList apps dispatch
+                            match model.Applications, model.CurrentView with
+                            | NotStarted, _ ->
+                                Html.div [
+                                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                                    prop.text "Loading..."
+                                ]
+                            | Loading, _ ->
+                                Html.div [
+                                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                                    prop.text "Loading applications..."
+                                ]
+                            | Loaded apps, TableView ->
+                                ViewComponents.applicationTable apps dispatch
+                            | Loaded _, DetailView ->
                                 match model.SelectedApplication with
-                                | Some app -> ViewComponents.applicationDetail app
+                                | Some app -> ViewComponents.applicationDetail app dispatch
                                 | None ->
                                     Html.div [
-                                        prop.className "bg-white/80 rounded-md shadow-md p-4"
+                                        prop.className "bg-white/80 rounded-md shadow-md p-4 text-center"
                                         prop.text "Select an application to view details"
                                     ]
                         ]

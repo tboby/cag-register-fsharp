@@ -4,6 +4,7 @@ open Elmish
 open SAFE
 open Shared
 open Feliz
+open Feliz.AgGrid
 
 type View =
     | TableView
@@ -79,82 +80,79 @@ module ViewComponents =
 
     let applicationTable (apps: CagApplication list) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4"
+            prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine"
             prop.children [
-                Html.div [
-                    prop.className "overflow-x-auto"
-                    prop.children [
-                        Html.table [
-                            prop.className "table w-full"
-                            prop.children [
-                                Html.thead [
-                                    Html.tr [
-                                        Html.th [
-                                            prop.className "bg-primary/10"
-                                            prop.text "App #"
-                                        ]
-                                        Html.th [
-                                            prop.className "bg-primary/10"
-                                            prop.text "Title"
-                                        ]
-                                        Html.th [
-                                            prop.className "bg-primary/10"
-                                            prop.text "Organisation"
-                                        ]
-                                        Html.th [
-                                            prop.className "bg-primary/10"
-                                            prop.text "Status"
-                                        ]
-                                        Html.th [
-                                            prop.className "bg-primary/10"
-                                            prop.text "Actions"
-                                        ]
+                AgGrid.grid [
+                    AgGrid.rowData (apps |> Array.ofList)
+                    AgGrid.defaultColDef [
+                        ColumnDef.resizable true
+                        ColumnDef.sortable true
+                        ColumnDef.filter (RowFilter.Text)
+                        //ColumnDef.filter
+                    ]
+                    AgGrid.columnDefs [
+                        ColumnDef.create<string> [
+                            ColumnDef.field "ApplicationNumber"
+                            ColumnDef.headerName "App #"
+                            ColumnDef.width 120
+                        ]
+                        ColumnDef.create<string> [
+                            ColumnDef.field "Title"
+                            ColumnDef.headerName "Title"
+                            ColumnDef.width 250
+                            ColumnDef.cellRenderer (fun x y ->
+                                Html.div [
+                                    Html.div [
+                                        prop.className "font-medium"
+                                        prop.text (y.Title)
+                                    ]
+                                    Html.div [
+                                        prop.className "text-sm text-gray-500"
+                                        prop.text (y.ContactName)
                                     ]
                                 ]
-                                Html.tbody [
-                                    for app in apps do
-                                        Html.tr [
-                                            prop.className "hover:bg-base-200"
-                                            prop.children [
-                                                Html.td app.ApplicationNumber
-                                                Html.td [
-                                                    Html.div [
-                                                        prop.className "font-medium"
-                                                        prop.text app.Title
-                                                    ]
-                                                    Html.div [
-                                                        prop.className "text-sm text-gray-500"
-                                                        prop.text app.ContactName
-                                                    ]
-                                                ]
-                                                Html.td app.ApplicantOrganisation
-                                                Html.td [
-                                                    Html.div [
-                                                        prop.className (
-                                                            match app.Status.ToLower() with
-                                                            | s when s.Contains("approved") -> "badge badge-success"
-                                                            | s when s.Contains("pending") -> "badge badge-warning"
-                                                            | s when s.Contains("rejected") -> "badge badge-error"
-                                                            | _ -> "badge"
-                                                        )
-                                                        prop.text app.Status
-                                                    ]
-                                                ]
-                                                Html.td [
-                                                    Html.button [
-                                                        prop.className "btn btn-sm btn-primary"
-                                                        prop.onClick (fun _ ->
-                                                            dispatch (SelectApplication (Some app))
-                                                        )
-                                                        prop.text "View Details"
-                                                    ]
-                                                ]
-                                            ]
-                                        ]
+                            )
+                        ]
+                        ColumnDef.create<string> [
+                            ColumnDef.field "ApplicantOrganisation"
+                            ColumnDef.headerName "Organisation"
+                            ColumnDef.width 200
+                        ]
+                        ColumnDef.create<string> [
+                            ColumnDef.field "Status"
+                            AgGrid.ColumnDef.headerName "Status"
+                            ColumnDef.width 150
+                            ColumnDef.cellRenderer (fun x y ->
+                                Html.div [
+                                    prop.className (
+                                        match (string y.Status).ToLower() with
+                                        | s when s.Contains("approved") -> "badge badge-success"
+                                        | s when s.Contains("pending") -> "badge badge-warning"
+                                        | s when s.Contains("rejected") -> "badge badge-error"
+                                        | _ -> "badge"
+                                    )
+                                    prop.text (string y.Status)
                                 ]
-                            ]
+                            )
+                        ]
+                        ColumnDef.create<unit> [
+                            ColumnDef.headerName "Actions"
+                            ColumnDef.width 150
+                            ColumnDef.cellRenderer (fun x y ->
+                                Html.button [
+                                    prop.className "btn btn-sm btn-primary"
+                                    prop.onClick (fun _ ->
+                                        dispatch (SelectApplication (Some y))
+                                    )
+                                    prop.text "View Details"
+                                ]
+                            )
                         ]
                     ]
+                    AgGrid.pagination true
+                    AgGrid.paginationPageSize 10
+                    AgGrid.domLayout DOMLayout.AutoHeight
+                    //AgGrid.theme "alpine"
                 ]
             ]
         ]

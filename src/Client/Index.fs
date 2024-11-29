@@ -554,6 +554,35 @@ module ViewComponents =
             | Loaded discrepancies -> discrepancyTable discrepancies dispatch
             | Loading -> Html.div "Loading discrepancies..."
             | NotStarted -> Html.div "Loading discrepancies..."
+    let renderTab (tab: TabState) activeTabId dispatch =
+        Html.div [
+            prop.className [
+                "flex items-center px-4 py-2 rounded-t-lg cursor-pointer transition-colors"
+                if tab.Id = activeTabId then
+                    "bg-blue-500 text-white"
+                else "bg-gray-100 hover:bg-gray-200"
+            ]
+            prop.children [
+                Html.span [
+                    prop.className "mr-2"
+                    prop.text tab.Title
+                ]
+                if tab.Id <> "home" then  // Don't show close button on home tab
+                    Html.button [
+                        prop.className "hover:text-red-500 ml-2"
+                        prop.onClick (fun e ->
+                            e.stopPropagation()
+                            dispatch (CloseTab tab.Id)
+                        )
+                        prop.children [
+                            Html.i [
+                                prop.className "fas fa-times"
+                            ]
+                        ]
+                    ]
+            ]
+            prop.onClick (fun _ -> dispatch (SetActiveTab tab.Id))
+        ]
 
     let tabBar (tabs: TabState list) activeTabId dispatch =
         Html.div [
@@ -562,34 +591,19 @@ module ViewComponents =
                 Html.div [
                     prop.className "flex space-x-2 p-2"
                     prop.children [
-                        for tab in tabs ->
-                            Html.div [
-                                prop.className [
-                                    "flex items-center px-4 py-2 rounded-t-lg cursor-pointer transition-colors"
-                                    if tab.Id = activeTabId then
-                                        "bg-blue-500 text-white"
-                                    else "bg-gray-100 hover:bg-gray-200"
-                                ]
-                                prop.children [
-                                    Html.span [
-                                        prop.className "mr-2"
-                                        prop.text tab.Title
-                                    ]
-                                    if tab.Id <> "home" then  // Don't show close button on home tab
-                                        Html.button [
-                                            prop.className "hover:text-red-500 ml-2"
-                                            prop.onClick (fun e ->
-                                                e.stopPropagation()
-                                                dispatch (CloseTab tab.Id)
-                                            )
-                                            prop.children [
-                                                Html.i [
-                                                    prop.className "fas fa-times"
-                                                ]
-                                            ]
-                                        ]
-                                ]
-                                prop.onClick (fun _ -> dispatch (SetActiveTab tab.Id))
+                        for tab in tabs -> renderTab tab activeTabId dispatch
+                        if List.length (List.filter (fun t -> t.Id <> "home") tabs) > 1 then
+                            yield Html.button [
+                                prop.className "btn btn-danger ml-2"
+                                prop.onClick (fun _ ->
+                                    // Dispatch a message to close all tabs
+                                    tabs
+                                    |> List.iter (fun t ->
+                                        if t.Id <> "home" then
+                                            dispatch (CloseTab t.Id)
+                                    )
+                                )
+                                prop.text "Close All Tabs"
                             ]
                     ]
                 ]

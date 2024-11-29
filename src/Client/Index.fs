@@ -34,6 +34,8 @@ type Msg =
     | CloseTab of string
     | SetActiveTab of string
     | ToggleTabMinimize of string
+    | OpenAndFocusTab of TabContent
+
 
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
@@ -52,6 +54,20 @@ let init () =
     }
     let cmd = LoadApplications(Start()) |> Cmd.ofMsg
     model, cmd
+let createShortTitle =
+    function
+    | TableContent -> "Applications"
+    | DiscrepancyContent -> "Discrepancies"
+    | ApplicationContent app ->
+        let maxTitleLength = 20
+
+        let shortTitle =
+            if app.Title.Length > maxTitleLength then
+                app.Title.Substring(0, maxTitleLength) + "..."
+            else
+                app.Title
+
+        sprintf "%s: %s" app.ApplicationNumber shortTitle
 
 let update msg model =
     match msg with
@@ -80,13 +96,13 @@ let update msg model =
         let (id, title) =
             match content with
             | TableContent -> "home", "Applications"
-            | ApplicationContent app -> app.ApplicationNumber, app.Title
+            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
         match existingTab with
         | Some _ ->
-            { model with ActiveTabId = id }, Cmd.none
+            model, Cmd.none
         | None ->
             let newTab = {
                 Id = id
@@ -94,10 +110,7 @@ let update msg model =
                 Content = content
                 IsMinimized = false
             }
-            { model with
-                OpenTabs = model.OpenTabs @ [newTab]
-                ActiveTabId = id
-            },
+            { model with OpenTabs = model.OpenTabs @ [newTab] },
             match content with
             | DiscrepancyContent when model.Discrepancies = NotStarted ->
                 Cmd.ofMsg (LoadDiscrepancies(Start()))
@@ -122,7 +135,32 @@ let update msg model =
                 else tab
             )
         { model with OpenTabs = newTabs }, Cmd.none
+    | OpenAndFocusTab content ->
+        let (id, title) =
+            match content with
+            | TableContent -> "home", "Applications"
+            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
+        let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
+        match existingTab with
+        | Some _ ->
+            { model with ActiveTabId = id }, Cmd.none
+        | None ->
+            let newTab = {
+                Id = id
+                Title = title
+                Content = content
+                IsMinimized = false
+            }
+            { model with
+                OpenTabs = model.OpenTabs @ [newTab]
+                ActiveTabId = id
+            },
+            match content with
+            | DiscrepancyContent when model.Discrepancies = NotStarted ->
+                Cmd.ofMsg (LoadDiscrepancies(Start()))
+            | _ -> Cmd.none
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
@@ -139,7 +177,7 @@ module ViewComponents =
                     Html.li [
                         Html.a [
                             prop.className (if model.ActiveTabId = "discrepancies" then "font-bold" else "")
-                            prop.onClick (fun _ -> dispatch (OpenTab DiscrepancyContent))
+                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
                             prop.text "Discrepancies"
                         ]
                     ]
@@ -216,12 +254,32 @@ module ViewComponents =
                         ]
                         ColumnDef.create<unit> [
                             ColumnDef.headerName "Actions"
-                            ColumnDef.width 150
+                            ColumnDef.width 200
                             ColumnDef.cellRenderer (fun x y ->
-                                Html.button [
-                                    prop.className "btn btn-sm btn-primary"
-                                    prop.onClick (fun _ -> dispatch (OpenTab (ApplicationContent y)))
-                                    prop.text "View Details"
+                                Html.div [
+                                    prop.className "flex gap-2"
+                                    prop.children [
+                                        Html.button [
+                                            prop.className "btn btn-sm btn-outline"
+                                            prop.onClick (fun _ -> dispatch (OpenTab (ApplicationContent y)))
+                                            prop.children [
+                                                Html.i [
+                                                    prop.className "fas fa-eye"  // Using Font Awesome icon
+                                                    prop.title "Open in background"
+                                                ]
+                                            ]
+                                        ]
+                                        Html.button [
+                                            prop.className "btn btn-sm btn-primary"
+                                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent y)))
+                                            prop.children [
+                                                Html.i [
+                                                    prop.className "fas fa-external-link-alt"  // Using Font Awesome icon
+                                                    prop.title "Open and focus"
+                                                ]
+                                            ]
+                                        ]
+                                    ]
                                 ]
                             )
                         ]
@@ -545,7 +603,6 @@ module ViewComponents =
                                             prop.children [
                                                 Html.i [
                                                     prop.className "fas fa-times"
-                                                    prop.text "×"
                                                 ]
                                             ]
                                         ]

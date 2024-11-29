@@ -6,12 +6,15 @@ open Shared
 open Feliz
 open Feliz.AgGrid
 
-type View =
-    | TableView
-    | DiscrepancyView
+type TabContent =
+    | TableContent
+    | ApplicationContent of CagApplication
+    | DiscrepancyContent
 
 type TabState = {
-    Application: CagApplication
+    Id: string
+    Title: string
+    Content: TabContent
     IsMinimized: bool
 }
 
@@ -20,19 +23,17 @@ type Model = {
     FrontPageEntries: RemoteData<CagFrontPageEntry list>
     Discrepancies: RemoteData<ApplicationDiscrepancy list>
     OpenTabs: TabState list
-    ActiveTabId: string option
-    CurrentView: View
+    ActiveTabId: string
 }
 
 type Msg =
     | LoadApplications of ApiCall<unit, CagApplication list>
     | LoadFrontPageEntries of ApiCall<unit, CagFrontPageEntry list>
     | LoadDiscrepancies of ApiCall<unit, ApplicationDiscrepancy list>
-    | OpenTab of CagApplication
+    | OpenTab of TabContent
     | CloseTab of string
-    | SetActiveTab of string option
+    | SetActiveTab of string
     | ToggleTabMinimize of string
-    | SetView of View
 
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
@@ -41,9 +42,13 @@ let init () =
         Applications = NotStarted
         FrontPageEntries = NotStarted
         Discrepancies = NotStarted
-        OpenTabs = []
-        ActiveTabId = None
-        CurrentView = TableView
+        OpenTabs = [
+            { Id = "home"
+              Title = "Applications"
+              Content = TableContent
+              IsMinimized = false }
+        ]
+        ActiveTabId = "home"
     }
     let cmd = LoadApplications(Start()) |> Cmd.ofMsg
     model, cmd
@@ -71,79 +76,83 @@ let update msg model =
             { model with Discrepancies = Loading }, cmd
         | Finished discrepancies ->
             { model with Discrepancies = Loaded discrepancies }, Cmd.none
-    | OpenTab app ->
-        let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Application.ApplicationNumber = app.ApplicationNumber)
+    | OpenTab content ->
+        let (id, title) =
+            match content with
+            | TableContent -> "home", "Applications"
+            | ApplicationContent app -> app.ApplicationNumber, app.Title
+            | DiscrepancyContent -> "discrepancies", "Discrepancies"
+
+        let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
         match existingTab with
         | Some _ ->
-            { model with ActiveTabId = Some app.ApplicationNumber }, Cmd.none
+            { model with ActiveTabId = id }, Cmd.none
         | None ->
+            let newTab = {
+                Id = id
+                Title = title
+                Content = content
+                IsMinimized = false
+            }
             { model with
-                OpenTabs = model.OpenTabs @ [{ Application = app; IsMinimized = false }]
-                ActiveTabId = Some app.ApplicationNumber
+                OpenTabs = model.OpenTabs @ [newTab]
+                ActiveTabId = id
+            },
+            match content with
+            | DiscrepancyContent when model.Discrepancies = NotStarted ->
+                Cmd.ofMsg (LoadDiscrepancies(Start()))
+            | _ -> Cmd.none
+    | CloseTab id ->
+        if id = "home" then
+            model, Cmd.none // Can't close home tab
+        else
+            let newTabs = model.OpenTabs |> List.filter (fun t -> t.Id <> id)
+            { model with
+                OpenTabs = newTabs
+                ActiveTabId = if model.ActiveTabId = id then "home" else model.ActiveTabId
             }, Cmd.none
-    | CloseTab appNumber ->
-        let newTabs = model.OpenTabs |> List.filter (fun t -> t.Application.ApplicationNumber <> appNumber)
-        let newActiveTab =
-            if model.ActiveTabId = Some appNumber then
-                newTabs |> List.tryLast |> Option.map (fun t -> t.Application.ApplicationNumber)
-            else model.ActiveTabId
-        { model with
-            OpenTabs = newTabs
-            ActiveTabId = newActiveTab
-        }, Cmd.none
     | SetActiveTab tabId ->
         { model with ActiveTabId = tabId }, Cmd.none
     | ToggleTabMinimize appNumber ->
         let newTabs =
             model.OpenTabs
             |> List.map (fun tab ->
-                if tab.Application.ApplicationNumber = appNumber then
+                if tab.Id = appNumber then
                     { tab with IsMinimized = not tab.IsMinimized }
                 else tab
             )
         { model with OpenTabs = newTabs }, Cmd.none
-    | SetView view ->
-        { model with
-            CurrentView = view
-            ActiveTabId = if view = TableView then None else model.ActiveTabId
-        }, Cmd.none
 
 module ViewComponents =
-    let navigationBreadcrumb model dispatch =
+    let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
             prop.className "text-sm breadcrumbs p-4 bg-white/80 rounded-md shadow-md mb-4"
             prop.children [
                 Html.ul [
                     Html.li [
                         Html.a [
-                            prop.className (if model.CurrentView = TableView then "font-bold" else "")
-                            prop.onClick (fun _ -> dispatch (SetView TableView))
+                            prop.className (if model.ActiveTabId = "home" then "font-bold" else "")
+                            prop.onClick (fun _ -> dispatch (SetActiveTab "home"))
                             prop.text "Applications"
                         ]
                     ]
                     Html.li [
                         Html.a [
-                            prop.className (if model.CurrentView = DiscrepancyView then "font-bold" else "")
-                            prop.onClick (fun _ ->
-                                dispatch (SetView DiscrepancyView)
-                                if model.Discrepancies = NotStarted then
-                                    dispatch (LoadDiscrepancies(Start()))
-                            )
+                            prop.className (if model.ActiveTabId = "discrepancies" then "font-bold" else "")
+                            prop.onClick (fun _ -> dispatch (OpenTab DiscrepancyContent))
                             prop.text "Discrepancies"
                         ]
                     ]
-                    match model.ActiveTabId with
-                    | Some activeId ->
-                        match model.OpenTabs |> List.tryFind (fun t -> t.Application.ApplicationNumber = activeId) with
-                        | Some tab when not tab.IsMinimized ->
-                            Html.li [
-                                Html.a [
-                                    prop.className "font-bold"
-                                    prop.text tab.Application.Title
-                                ]
+                    // Show current application tab if one is active
+                    match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
+                    | Some tab when tab.Id <> "home" && tab.Id <> "discrepancies" && not tab.IsMinimized ->
+                        Html.li [
+                            Html.a [
+                                prop.className "font-bold"
+                                prop.text tab.Title
                             ]
-                        | _ -> ()
-                    | None -> ()
+                        ]
+                    | _ -> ()
                 ]
             ]
         ]
@@ -211,7 +220,7 @@ module ViewComponents =
                             ColumnDef.cellRenderer (fun x y ->
                                 Html.button [
                                     prop.className "btn btn-sm btn-primary"
-                                    prop.onClick (fun _ -> dispatch (OpenTab y))
+                                    prop.onClick (fun _ -> dispatch (OpenTab (ApplicationContent y)))
                                     prop.text "View Details"
                                 ]
                             )
@@ -483,6 +492,29 @@ module ViewComponents =
             ]
         ]
 
+    let tabContent (tab: TabState) model dispatch =
+        match tab.Content with
+        | TableContent ->
+            match model.Applications with
+            | Loaded apps -> applicationTable apps dispatch
+            | Loading ->
+                Html.div [
+                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                    prop.text "Loading applications..."
+                ]
+            | NotStarted ->
+                Html.div [
+                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                    prop.text "Loading..."
+                ]
+        | ApplicationContent app ->
+            applicationDetail app dispatch
+        | DiscrepancyContent ->
+            match model.Discrepancies with
+            | Loaded discrepancies -> discrepancyTable discrepancies dispatch
+            | Loading -> Html.div "Loading discrepancies..."
+            | NotStarted -> Html.div "Loading discrepancies..."
+
     let tabBar (tabs: TabState list) activeTabId dispatch =
         Html.div [
             prop.className "fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200"
@@ -494,33 +526,34 @@ module ViewComponents =
                             Html.div [
                                 prop.className [
                                     "flex items-center px-4 py-2 rounded-t-lg cursor-pointer transition-colors"
-                                    if Some tab.Application.ApplicationNumber = activeTabId then
+                                    if tab.Id = activeTabId then
                                         "bg-blue-500 text-white"
                                     else "bg-gray-100 hover:bg-gray-200"
                                 ]
                                 prop.children [
                                     Html.span [
                                         prop.className "mr-2"
-                                        prop.text tab.Application.Title
+                                        prop.text tab.Title
                                     ]
-                                    Html.button [
-                                        prop.className "hover:text-red-500 ml-2"
-                                        prop.onClick (fun e ->
-                                            e.stopPropagation()
-                                            dispatch (CloseTab tab.Application.ApplicationNumber)
-                                        )
-                                        prop.children [
-                                            Html.i [
-                                                prop.className "fas fa-times"
-                                                prop.text "×"
+                                    if tab.Id <> "home" then  // Don't show close button on home tab
+                                        Html.button [
+                                            prop.className "hover:text-red-500 ml-2"
+                                            prop.onClick (fun e ->
+                                                e.stopPropagation()
+                                                dispatch (CloseTab tab.Id)
+                                            )
+                                            prop.children [
+                                                Html.i [
+                                                    prop.className "fas fa-times"
+                                                    prop.text "×"
+                                                ]
                                             ]
                                         ]
-                                    ]
                                 ]
                                 prop.onClick (fun _ ->
                                     if tab.IsMinimized then
-                                        dispatch (ToggleTabMinimize tab.Application.ApplicationNumber)
-                                    dispatch (SetActiveTab (Some tab.Application.ApplicationNumber))
+                                        dispatch (ToggleTabMinimize tab.Id)
+                                    dispatch (SetActiveTab tab.Id)
                                 )
                             ]
                     ]
@@ -539,52 +572,16 @@ let view model dispatch =
                         prop.className "text-center text-5xl font-bold text-gray-800 mb-8"
                         prop.text "CAG Register"
                     ]
-                    ViewComponents.navigationBreadcrumb model dispatch
 
-                    // Main content area
-                    Html.div [
-                        prop.className "transition-all duration-300 ease-in-out"
-                        prop.children [
-                            // Show table or discrepancy view
-                            match model.Applications, model.CurrentView with
-                            | NotStarted, _ ->
-                                Html.div [
-                                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
-                                    prop.text "Loading..."
-                                ]
-                            | Loading, _ ->
-                                Html.div [
-                                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
-                                    prop.text "Loading applications..."
-                                ]
-                            | Loaded apps, TableView ->
-                                ViewComponents.applicationTable apps dispatch
-                            | Loaded _, DiscrepancyView ->
-                                match model.Discrepancies with
-                                | Loaded discrepancies -> ViewComponents.discrepancyTable discrepancies dispatch
-                                | Loading -> Html.div "Loading discrepancies..."
-                                | NotStarted -> Html.div "Click to load discrepancies"
-                        ]
-                    ]
-
-                    // Tab content area
-                    match model.ActiveTabId with
-                    | Some activeId ->
-                        match model.OpenTabs |> List.tryFind (fun t -> t.Application.ApplicationNumber = activeId) with
-                        | Some tab when not tab.IsMinimized ->
-                            Html.div [
-                                prop.className "mt-4"
-                                prop.children [
-                                    ViewComponents.applicationDetail tab.Application dispatch
-                                ]
-                            ]
-                        | _ -> ()
-                    | None -> ()
+                    // Active tab content
+                    match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
+                    | Some tab when not tab.IsMinimized ->
+                        ViewComponents.tabContent tab model dispatch
+                    | _ -> Html.none
                 ]
             ]
 
-            // Tab bar at bottom
-            if not (List.isEmpty model.OpenTabs) then
-                ViewComponents.tabBar model.OpenTabs model.ActiveTabId dispatch
+            // Tab bar
+            ViewComponents.tabBar model.OpenTabs model.ActiveTabId dispatch
         ]
     ]

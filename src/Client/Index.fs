@@ -9,15 +9,20 @@ open Feliz.AgGrid
 type View =
     | TableView
     | DetailView
+    | DiscrepancyView
 
 type Model = {
     Applications: RemoteData<CagApplication list>
+    FrontPageEntries: RemoteData<CagFrontPageEntry list>
+    Discrepancies: RemoteData<ApplicationDiscrepancy list>
     SelectedApplication: CagApplication option
     CurrentView: View
 }
 
 type Msg =
     | LoadApplications of ApiCall<unit, CagApplication list>
+    | LoadFrontPageEntries of ApiCall<unit, CagFrontPageEntry list>
+    | LoadDiscrepancies of ApiCall<unit, ApplicationDiscrepancy list>
     | SelectApplication of CagApplication option
     | SetView of View
 
@@ -26,6 +31,8 @@ let applicationsApi =
 let init () =
     let model = {
         Applications = NotStarted
+        FrontPageEntries = NotStarted
+        Discrepancies = NotStarted
         SelectedApplication = None
         CurrentView = TableView
     }
@@ -41,6 +48,20 @@ let update msg model =
             { model with Applications = Loading }, cmd
         | Finished apps ->
             { model with Applications = Loaded apps }, Cmd.none
+    | LoadFrontPageEntries msg ->
+        match msg with
+        | Start () ->
+            let cmd = Cmd.OfAsync.perform applicationsApi.getFrontPageEntries () (Finished >> LoadFrontPageEntries)
+            { model with FrontPageEntries = Loading }, cmd
+        | Finished frontPageEntries ->
+            { model with FrontPageEntries = Loaded frontPageEntries }, Cmd.none
+    | LoadDiscrepancies msg ->
+        match msg with
+        | Start () ->
+            let cmd = Cmd.OfAsync.perform applicationsApi.getDiscrepancies () (Finished >> LoadDiscrepancies)
+            { model with Discrepancies = Loading }, cmd
+        | Finished discrepancies ->
+            { model with Discrepancies = Loaded discrepancies }, Cmd.none
     | SelectApplication appOpt ->
         { model with
             SelectedApplication = appOpt
@@ -63,6 +84,17 @@ module ViewComponents =
                             prop.className (if model.CurrentView = TableView then "font-bold" else "")
                             prop.onClick (fun _ -> dispatch (SetView TableView))
                             prop.text "Applications"
+                        ]
+                    ]
+                    Html.li [
+                        Html.a [
+                            prop.className (if model.CurrentView = DiscrepancyView then "font-bold" else "")
+                            prop.onClick (fun _ ->
+                                dispatch (SetView DiscrepancyView)
+                                if model.Discrepancies = NotStarted then
+                                    dispatch (LoadDiscrepancies(Start()))
+                            )
+                            prop.text "Discrepancies"
                         ]
                     ]
                     match model.SelectedApplication with
@@ -371,6 +403,50 @@ module ViewComponents =
             ]
         ]
 
+    let discrepancyTable (discrepancies: ApplicationDiscrepancy list) dispatch =
+        Html.div [
+            prop.className "bg-white/80 rounded-md shadow-md p-4"
+            prop.children [
+                Html.table [
+                    prop.className "table w-full"
+                    prop.children [
+                        Html.thead [
+                            Html.tr [
+                                Html.th "App #"
+                                Html.th "Field"
+                                Html.th "Front Page Value"
+                                Html.th "Detail Page Value"
+                            ]
+                        ]
+                        Html.tbody [
+                            for disc in discrepancies do
+                                let addRow (fieldName: string) (frontValue: string) (detailValue: string) =
+                                    Html.tr [
+                                        Html.td disc.ApplicationNumber
+                                        Html.td fieldName
+                                        Html.td frontValue
+                                        Html.td detailValue
+                                    ]
+
+                                if disc.Differences.Title then
+                                    addRow "Title" disc.FrontPage.Title disc.Detail.Title
+                                if disc.Differences.Status then
+                                    addRow "Status" disc.FrontPage.Status disc.Detail.Status
+                                if disc.Differences.Contact then
+                                    addRow "Contact" disc.FrontPage.Contact disc.Detail.ContactName
+                                if disc.Differences.Organisation then
+                                    addRow "Organisation" disc.FrontPage.Organisation disc.Detail.ApplicantOrganisation
+                                if disc.Differences.NationalDataOptOutStatus then
+                                    addRow "NDOO"
+                                        (Option.defaultValue "None" disc.FrontPage.NationalDataOptOutStatus)
+                                        (Option.defaultValue "None" disc.Detail.NDOO)
+                                // ... add other differences as needed
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
 let view model dispatch =
     Html.section [
         prop.className "min-h-screen w-screen overflow-auto bg-gradient-to-br from-blue-50 to-indigo-100"
@@ -407,6 +483,12 @@ let view model dispatch =
                                         prop.className "bg-white/80 rounded-md shadow-md p-4 text-center"
                                         prop.text "Select an application to view details"
                                     ]
+                            | Loaded _, DiscrepancyView ->
+                                match model.Discrepancies with
+                                | Loaded discrepancies -> ViewComponents.discrepancyTable discrepancies dispatch
+                                | Loading -> Html.div "Loading discrepancies..."
+                                | NotStarted -> Html.div "Click to load discrepancies"
+                                //| Failed err -> Html.div ["Error loading discrepancies: " + err]
                         ]
                     ]
                 ]

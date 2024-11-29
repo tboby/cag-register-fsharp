@@ -77,6 +77,42 @@ let excel = testList "Excel" [
         printfn "All Medical Purposes Not Checked: %A" allMedicalPurposesNotChecked
         printfn "All S251 Classes Not Checked: %A" allS251ClassesNotChecked
         printfn "All CPI Other Values: %A" allCPIOtherValues
+
+    testCase "Can parse front page entries"
+    <| fun _ ->
+        let entries = CagRegisterXLSM.getApplicationDetails()
+
+        // Should return some entries
+        Expect.isGreaterThan entries.Length 0 "Should parse some front page entries"
+
+        // Test first entry has required fields
+        let firstEntry = entries.[0]
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.ApplicationNumber))) "Should have application number"
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.Reference))) "Should have reference"
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.Title))) "Should have title"
+
+    testCase "Front page entries correlate with detailed entries"
+    <| fun _ ->
+        let frontPageEntries = CagRegisterXLSM.getFrontPageEntries()
+        let detailedEntries = CagRegisterXLSM.getApplicationDetails()
+
+        // Check that every front page entry has a corresponding detailed entry
+        frontPageEntries |> List.iter (fun frontPage ->
+            let matching = detailedEntries |> List.tryFind (fun detail ->
+                detail.ApplicationNumber = frontPage.ApplicationNumber)
+
+            Expect.isSome matching
+                (sprintf "Application %s should have a detailed entry" frontPage.ApplicationNumber)
+
+            matching |> Option.iter (fun detail ->
+                let detailTitleFirstLine = detail.Title.Trim().Split('\n').[0]
+                let frontPageTitleFirstLine = frontPage.Title.Trim().Split('\n').[0]
+                Expect.equal detailTitleFirstLine frontPageTitleFirstLine
+                    (sprintf "Title should match for application %s" frontPage.ApplicationNumber)
+                Expect.equal (detail.Status.Trim()) (frontPage.Status.Trim())
+                    (sprintf "Status should match for application %s" frontPage.ApplicationNumber)
+            )
+        )
 ]
 
 [<Tests>]

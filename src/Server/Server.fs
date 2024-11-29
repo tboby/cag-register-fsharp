@@ -161,6 +161,104 @@ module CagRegisterXLSM =
         let results = Async.Parallel tasks |> Async.RunSynchronously
         results |> Array.choose id |> List.ofArray // Filter out None values
 
+    let getFrontPageEntries () =
+        use workbook = new ExcelPackage(new FileInfo(cagRegisterFile))
+        let indexSheet = workbook.Workbook.Worksheets.[0]
+
+        [2..indexSheet.Dimension.End.Row]
+        |> List.choose (fun row ->
+            let appNo = indexSheet.Cells.[row, 1].Text
+            if System.String.IsNullOrWhiteSpace(appNo) then None
+            else
+                try
+                    Some {
+                        ApplicationNumber = appNo
+                        Reference = indexSheet.Cells.[row, 2].Text
+                        Title = indexSheet.Cells.[row, 3].Text
+                        Status = indexSheet.Cells.[row, 4].Text
+                        OutcomeDate =
+                            try Some(indexSheet.Cells.[row, 5].GetValue<System.DateTime>())
+                            with _ -> None
+                        NextReviewDate =
+                            try Some(indexSheet.Cells.[row, 6].GetValue<System.DateTime>())
+                            with _ -> None
+                        Contact = indexSheet.Cells.[row, 7].Text
+                        Organisation = indexSheet.Cells.[row, 8].Text
+                        NationalDataOptOutStatus =
+                            let value = indexSheet.Cells.[row, 9].Text
+                            if System.String.IsNullOrWhiteSpace(value) then None
+                            else Some value
+                        EnglishConfidentialPatientInfo =
+                            match indexSheet.Cells.[row, 10].Text.ToLowerInvariant() with
+                            | "yes" -> Some true
+                            | "no" -> Some false
+                            | _ -> None
+                        WelshConfidentialPatientInfo =
+                            match indexSheet.Cells.[row, 11].Text.ToLowerInvariant() with
+                            | "yes" -> Some true
+                            | "no" -> Some false
+                            | _ -> None
+                    }
+                with ex ->
+                    printfn "Error parsing front page row %d: %s" row ex.Message
+                    None
+        )
+
+    let getDiscrepancies () =
+        let frontPage = getFrontPageEntries()
+        let details = getApplicationDetails()
+
+        frontPage
+        |> List.choose (fun front ->
+            details
+            |> List.tryFind (fun detail -> detail.ApplicationNumber = front.ApplicationNumber)
+            |> Option.map (fun detail ->
+                let differences = {
+                    Title =
+                        let detailTitleFirstLine = detail.Title.Trim().Split('\n').[0]
+                        let frontPageTitleFirstLine = front.Title.Trim().Split('\n').[0]
+                        detailTitleFirstLine <> frontPageTitleFirstLine
+
+                    Status =
+                        detail.Status.Trim() <> front.Status.Trim()
+
+                    OutcomeDate =
+                        detail.OutcomeDate <> front.OutcomeDate
+
+                    NextReviewDate =
+                        detail.NextReviewDate <> front.NextReviewDate
+
+                    Contact =
+                        detail.ContactName.Trim() <> front.Contact.Trim()
+
+                    Organisation =
+                        detail.ApplicantOrganisation.Trim() <> front.Organisation.Trim()
+
+                    NationalDataOptOutStatus =
+                        detail.NDOO <> front.NationalDataOptOutStatus
+
+                    EnglishConfidentialPatientInfo =
+                        match detail.EnglishCPI, front.EnglishConfidentialPatientInfo with
+                        | Some CPIValue.Yes, Some true
+                        | Some CPIValue.No, Some false -> false
+                        | _ -> true
+
+                    WelshConfidentialPatientInfo =
+                        match detail.WelshCPI, front.WelshConfidentialPatientInfo with
+                        | Some CPIValue.Yes, Some true
+                        | Some CPIValue.No, Some false -> false
+                        | _ -> true
+                }
+
+                {
+                    ApplicationNumber = front.ApplicationNumber
+                    FrontPage = front
+                    Detail = detail
+                    Differences = differences
+                }
+            )
+        )
+
 module Storage =
     let todos =
         ResizeArray [
@@ -190,6 +288,12 @@ let todosApi ctx = {
 let applicationsApi ctx = {
     getApplications = fun () -> async {
         return CagRegisterXLSM.getApplicationDetails()
+    }
+    getFrontPageEntries = fun () -> async {
+        return CagRegisterXLSM.getFrontPageEntries()
+    }
+    getDiscrepancies = fun () -> async {
+        return CagRegisterXLSM.getDiscrepancies()
     }
 }
 

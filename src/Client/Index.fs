@@ -112,7 +112,8 @@ let update msg model =
             }
             { model with OpenTabs = model.OpenTabs @ [newTab] },
             match content with
-            | DiscrepancyContent when model.Discrepancies = NotStarted ->
+            | DiscrepancyContent ->
+                // Always load discrepancies when opening the tab
                 Cmd.ofMsg (LoadDiscrepancies(Start()))
             | _ -> Cmd.none
     | CloseTab id ->
@@ -145,7 +146,12 @@ let update msg model =
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
         match existingTab with
         | Some _ ->
-            { model with ActiveTabId = id }, Cmd.none
+            { model with ActiveTabId = id },
+            match content with
+            | DiscrepancyContent ->
+                // Always load discrepancies when focusing the tab
+                Cmd.ofMsg (LoadDiscrepancies(Start()))
+            | _ -> Cmd.none
         | None ->
             let newTab = {
                 Id = id
@@ -158,7 +164,8 @@ let update msg model =
                 ActiveTabId = id
             },
             match content with
-            | DiscrepancyContent when model.Discrepancies = NotStarted ->
+            | DiscrepancyContent ->
+                // Always load discrepancies when opening the tab
                 Cmd.ofMsg (LoadDiscrepancies(Start()))
             | _ -> Cmd.none
 module ViewComponents =
@@ -172,13 +179,6 @@ module ViewComponents =
                             prop.className (if model.ActiveTabId = "home" then "font-bold" else "")
                             prop.onClick (fun _ -> dispatch (SetActiveTab "home"))
                             prop.text "Applications"
-                        ]
-                    ]
-                    Html.li [
-                        Html.a [
-                            prop.className (if model.ActiveTabId = "discrepancies" then "font-bold" else "")
-                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
-                            prop.text "Discrepancies"
                         ]
                     ]
                     // Show current application tab if one is active
@@ -199,6 +199,16 @@ module ViewComponents =
         Html.div [
             prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine"
             prop.children [
+                Html.div [
+                    prop.className "flex justify-end mb-4"
+                    prop.children [
+                        Html.button [
+                            prop.className "btn btn-primary"
+                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
+                            prop.text "View Discrepancies"
+                        ]
+                    ]
+                ]
                 AgGrid.grid [
                     AgGrid.rowData (apps |> Array.ofList)
                     AgGrid.defaultColDef [

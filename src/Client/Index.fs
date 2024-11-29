@@ -15,7 +15,6 @@ type TabState = {
     Id: string
     Title: string
     Content: TabContent
-    IsMinimized: bool
 }
 
 type Model = {
@@ -31,10 +30,9 @@ type Msg =
     | LoadFrontPageEntries of ApiCall<unit, CagFrontPageEntry list>
     | LoadDiscrepancies of ApiCall<unit, ApplicationDiscrepancy list>
     | OpenTab of TabContent
+    | OpenAndFocusTab of TabContent
     | CloseTab of string
     | SetActiveTab of string
-    | ToggleTabMinimize of string
-    | OpenAndFocusTab of TabContent
 
 
 let applicationsApi =
@@ -47,8 +45,7 @@ let init () =
         OpenTabs = [
             { Id = "home"
               Title = "Applications"
-              Content = TableContent
-              IsMinimized = false }
+              Content = TableContent }
         ]
         ActiveTabId = "home"
     }
@@ -92,6 +89,29 @@ let update msg model =
             { model with Discrepancies = Loading }, cmd
         | Finished discrepancies ->
             { model with Discrepancies = Loaded discrepancies }, Cmd.none
+    | OpenAndFocusTab content ->
+        let (id, title) =
+            match content with
+            | TableContent -> "home", "Applications"
+            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | DiscrepancyContent -> "discrepancies", "Discrepancies"
+
+        let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
+        match existingTab with
+        | Some _ ->
+            { model with ActiveTabId = id }, Cmd.none
+        | None ->
+            let newTab = {
+                Id = id
+                Title = title
+                Content = content
+            }
+            { model with OpenTabs = model.OpenTabs @ [newTab]; ActiveTabId = id },
+            match content with
+            | DiscrepancyContent ->
+                Cmd.ofMsg (LoadDiscrepancies(Start()))
+            | _ -> Cmd.none
+
     | OpenTab content ->
         let (id, title) =
             match content with
@@ -108,12 +128,10 @@ let update msg model =
                 Id = id
                 Title = title
                 Content = content
-                IsMinimized = false
             }
             { model with OpenTabs = model.OpenTabs @ [newTab] },
             match content with
             | DiscrepancyContent ->
-                // Always load discrepancies when opening the tab
                 Cmd.ofMsg (LoadDiscrepancies(Start()))
             | _ -> Cmd.none
     | CloseTab id ->
@@ -127,47 +145,6 @@ let update msg model =
             }, Cmd.none
     | SetActiveTab tabId ->
         { model with ActiveTabId = tabId }, Cmd.none
-    | ToggleTabMinimize appNumber ->
-        let newTabs =
-            model.OpenTabs
-            |> List.map (fun tab ->
-                if tab.Id = appNumber then
-                    { tab with IsMinimized = not tab.IsMinimized }
-                else tab
-            )
-        { model with OpenTabs = newTabs }, Cmd.none
-    | OpenAndFocusTab content ->
-        let (id, title) =
-            match content with
-            | TableContent -> "home", "Applications"
-            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
-            | DiscrepancyContent -> "discrepancies", "Discrepancies"
-
-        let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
-        match existingTab with
-        | Some _ ->
-            { model with ActiveTabId = id },
-            match content with
-            | DiscrepancyContent ->
-                // Always load discrepancies when focusing the tab
-                Cmd.ofMsg (LoadDiscrepancies(Start()))
-            | _ -> Cmd.none
-        | None ->
-            let newTab = {
-                Id = id
-                Title = title
-                Content = content
-                IsMinimized = false
-            }
-            { model with
-                OpenTabs = model.OpenTabs @ [newTab]
-                ActiveTabId = id
-            },
-            match content with
-            | DiscrepancyContent ->
-                // Always load discrepancies when opening the tab
-                Cmd.ofMsg (LoadDiscrepancies(Start()))
-            | _ -> Cmd.none
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
@@ -183,7 +160,7 @@ module ViewComponents =
                     ]
                     // Show current application tab if one is active
                     match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
-                    | Some tab when tab.Id <> "home" && tab.Id <> "discrepancies" && not tab.IsMinimized ->
+                    | Some tab when tab.Id <> "home" && tab.Id <> "discrepancies" ->
                         Html.li [
                             Html.a [
                                 prop.className "font-bold"
@@ -197,14 +174,14 @@ module ViewComponents =
 
     let applicationTable (apps: CagApplication list) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine"
+            prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
             prop.children [
                 Html.div [
                     prop.className "flex justify-end mb-4"
                     prop.children [
                         Html.button [
                             prop.className "btn btn-primary"
-                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
+                            prop.onClick (fun _ -> dispatch (OpenTab DiscrepancyContent))
                             prop.text "View Discrepancies"
                         ]
                     ]
@@ -271,21 +248,21 @@ module ViewComponents =
                                     prop.children [
                                         Html.button [
                                             prop.className "btn btn-sm btn-outline"
-                                            prop.onClick (fun _ -> dispatch (OpenTab (ApplicationContent y)))
+                                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent y)))
                                             prop.children [
                                                 Html.i [
                                                     prop.className "fas fa-eye"  // Using Font Awesome icon
-                                                    prop.title "Open in background"
+                                                    prop.title "Open and focus"
                                                 ]
                                             ]
                                         ]
                                         Html.button [
                                             prop.className "btn btn-sm btn-primary"
-                                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent y)))
+                                            prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent y)))
                                             prop.children [
                                                 Html.i [
-                                                    prop.className "fas fa-external-link-alt"  // Using Font Awesome icon
-                                                    prop.title "Open and focus"
+                                                    prop.className "fas fa-plus"  // Using Font Awesome icon
+                                                    prop.title "Open in background"
                                                 ]
                                             ]
                                         ]
@@ -304,24 +281,19 @@ module ViewComponents =
 
     let applicationDetail (app: CagApplication) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn"
+            prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
             prop.children [
                 Html.div [
-                    prop.className "flex justify-between items-center mb-6"
+                    prop.className "mb-6"
                     prop.children [
                         Html.h2 [
-                            prop.className "text-3xl font-bold"
+                            prop.className "text-3xl font-bold break-words"
                             prop.text app.Title
-                        ]
-                        Html.button [
-                            prop.className "btn btn-outline"
-                            prop.onClick (fun _ -> dispatch (ToggleTabMinimize app.ApplicationNumber))
-                            prop.text "Minimize"
                         ]
                     ]
                 ]
                 Html.div [
-                    prop.className "grid grid-cols-2 gap-4"
+                    prop.className "grid md:grid-cols-2 gap-4"
                     prop.children [
                         Html.div [
                             prop.children [
@@ -518,7 +490,7 @@ module ViewComponents =
 
     let discrepancyTable (discrepancies: ApplicationDiscrepancy list) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4"
+            prop.className "bg-white/80 rounded-md shadow-md p-4 mb-16 overflow-x-auto max-w-5xl mx-auto"
             prop.children [
                 Html.table [
                     prop.className "table w-full"
@@ -617,11 +589,7 @@ module ViewComponents =
                                             ]
                                         ]
                                 ]
-                                prop.onClick (fun _ ->
-                                    if tab.IsMinimized then
-                                        dispatch (ToggleTabMinimize tab.Id)
-                                    dispatch (SetActiveTab tab.Id)
-                                )
+                                prop.onClick (fun _ -> dispatch (SetActiveTab tab.Id))
                             ]
                     ]
                 ]
@@ -630,10 +598,10 @@ module ViewComponents =
 
 let view model dispatch =
     Html.section [
-        prop.className "min-h-screen w-screen overflow-auto bg-gradient-to-br from-blue-50 to-indigo-100 pb-16"
+        prop.className "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-x-hidden"
         prop.children [
             Html.div [
-                prop.className "container mx-auto px-4 py-8"
+                prop.className "container mx-auto px-4 py-8 pb-20 max-w-7xl"
                 prop.children [
                     Html.h1 [
                         prop.className "text-center text-5xl font-bold text-gray-800 mb-8"
@@ -642,9 +610,8 @@ let view model dispatch =
 
                     // Active tab content
                     match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
-                    | Some tab when not tab.IsMinimized ->
-                        ViewComponents.tabContent tab model dispatch
-                    | _ -> Html.none
+                    | Some tab -> ViewComponents.tabContent tab model dispatch
+                    | None -> Html.none
                 ]
             ]
 

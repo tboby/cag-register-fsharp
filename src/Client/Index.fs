@@ -311,218 +311,267 @@ module ViewComponents =
             ]
         ]
 
+
     let replaceNewlinesWithBr (text: string) =
-        text.Replace("\n", "<br />")
+        let mergeWhitespace (text: string) =
+            String.Join(" ", text.Split([|' '|], StringSplitOptions.RemoveEmptyEntries))
+        let removeWhiteSpaceOnlyLines (text: string) =
+            text.Split([|'\n'|], StringSplitOptions.RemoveEmptyEntries) |> Array.map mergeWhitespace |> String.concat "\n"
+        let rec replaceMultipleNewlines (text: string) =
+            let pattern = String.replicate 3 "\n"
+            let newText = text.Replace(pattern, "\n")
+            if newText = text then text
+            else replaceMultipleNewlines newText
+        text |> removeWhiteSpaceOnlyLines |> replaceMultipleNewlines |> (fun t -> t.Replace("\n", "<br />"))
 
     let applicationDetail (app: CagApplication) dispatch =
         Html.div [
             prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
             prop.children [
+                // Header Section
                 Html.div [
-                    prop.className "mb-6"
+                    prop.className "mb-8 border-b pb-4"
                     prop.children [
                         Html.h2 [
-                            prop.className "text-3xl font-bold break-words"
+                            prop.className "text-3xl font-bold break-words mb-4"
                             prop.text app.Title
+                        ]
+                        Html.div [
+                            prop.className "grid grid-cols-2 md:grid-cols-4 gap-4"
+                            prop.children [
+                                Html.div [
+                                    Html.strong "App #: "
+                                    Html.span app.ApplicationNumber
+                                ]
+                                Html.div [
+                                    Html.strong "Reference: "
+                                    Html.span app.Reference
+                                ]
+                                Html.div [
+                                    Html.strong "Status: "
+                                    Html.div [
+                                        prop.className (
+                                            match (string app.Status).ToLower() with
+                                            | s when s.Contains("approved") -> "badge badge-success"
+                                            | s when s.Contains("pending") -> "badge badge-warning"
+                                            | s when s.Contains("rejected") -> "badge badge-error"
+                                            | _ -> "badge"
+                                        )
+                                        prop.text (string app.Status)
+                                    ]
+                                ]
+                                Html.div [
+                                    Html.strong "Sponsor: "
+                                    Html.span app.Sponsor
+                                ]
+                            ]
                         ]
                     ]
                 ]
+
+                // Main content grid
                 Html.div [
-                    prop.className "grid md:grid-cols-2 gap-4"
+                    prop.className "grid md:grid-cols-2 gap-8"
+                    prop.children [
+                        // Contact Information Section
+                        Html.div [
+                            prop.className "bg-gray-50 p-4 rounded-lg"
+                            prop.children [
+                                Html.h3 [
+                                    prop.className "text-xl font-semibold mb-4"
+                                    prop.text "Contact Information"
+                                ]
+                                Html.div [
+                                    prop.className "grid gap-3"
+                                    prop.children [
+                                        Html.div [
+                                            Html.strong "Organisation: "
+                                            Html.span app.ApplicantOrganisation
+                                        ]
+                                        Html.div [
+                                            Html.strong "Contact Name: "
+                                            Html.span app.ContactName
+                                        ]
+                                        Html.div [
+                                            Html.strong "Email: "
+                                            Html.span app.Email
+                                        ]
+                                        Html.div [
+                                            Html.strong "Telephone: "
+                                            Html.span app.Telephone
+                                        ]
+                                        Html.div [
+                                            Html.strong "Address: "
+                                            Html.span (String.concat ", " app.Address)
+                                        ]
+                                        Html.div [
+                                            Html.strong "Postcode: "
+                                            Html.span app.Postcode
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+
+                        // Dates and References Section
+                        Html.div [
+                            prop.className "bg-gray-50 p-4 rounded-lg"
+                            prop.children [
+                                Html.h3 [
+                                    prop.className "text-xl font-semibold mb-4"
+                                    prop.text "Dates & References"
+                                ]
+                                Html.div [
+                                    prop.className "grid gap-3"
+                                    prop.children [
+                                        Html.div [
+                                            Html.strong "Outcome Date: "
+                                            Html.span (Option.defaultValue "-" (app.OutcomeDate |> Option.map (_.Format("yyyy-MM-dd"))))
+                                        ]
+                                        Html.div [
+                                            Html.strong "Next Review Date: "
+                                            Html.span (Option.defaultValue "-" (app.NextReviewDate |> Option.map (_.Format("yyyy-MM-dd"))))
+                                        ]
+                                        Html.div [
+                                            Html.strong "Other References: "
+                                            Html.span (Option.defaultValue "-" app.OtherRefs)
+                                        ]
+                                        Html.div [
+                                            Html.strong "NDOO: "
+                                            Html.span (Option.defaultValue "-" app.NDOO)
+                                        ]
+                                        Html.div [
+                                            Html.strong "English CPI: "
+                                            Html.span (Option.defaultValue "-" (Option.map string app.EnglishCPI))
+                                        ]
+                                        Html.div [
+                                            Html.strong "Welsh CPI: "
+                                            Html.span (Option.defaultValue "-" (Option.map string app.WelshCPI))
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+
+                // Purpose and Classifications Section
+                Html.div [
+                    prop.className "mt-8 grid md:grid-cols-2 gap-8"
+                    prop.children [
+                        // Medical Purposes
+                        Html.div [
+                            prop.className "bg-gray-50 p-4 rounded-lg"
+                            prop.children [
+                                Html.h3 [
+                                    prop.className "text-xl font-semibold mb-4"
+                                    prop.text "Medical Purposes"
+                                ]
+                                Html.div [
+                                    let allMedicalPurposes = [
+                                        MedicalPurpose.MedicalResearch
+                                        MedicalPurpose.PreventativeMedicine
+                                        MedicalPurpose.MedicalDiagnosis
+                                        MedicalPurpose.CareAndTreatment
+                                        MedicalPurpose.HealthAndSocialCareManagement
+                                        MedicalPurpose.InformingIndividuals
+                                    ]
+                                    for purpose in allMedicalPurposes do
+                                        Html.label [
+                                            prop.className "flex items-center gap-2 mb-2"
+                                            prop.children [
+                                                Html.input [
+                                                    prop.type' "checkbox"
+                                                    prop.isChecked (app.MedicalPurposes.Contains purpose)
+                                                    prop.disabled true
+                                                ]
+                                                Html.span (string purpose)
+                                            ]
+                                        ]
+                                ]
+                            ]
+                        ]
+
+                        // S251 Classes
+                        Html.div [
+                            prop.className "bg-gray-50 p-4 rounded-lg"
+                            prop.children [
+                                Html.h3 [
+                                    prop.className "text-xl font-semibold mb-4"
+                                    prop.text "S251 Classes"
+                                ]
+                                Html.div [
+                                    let allS251Classes = [
+                                        S251Class.SpecificSupport
+                                        S251Class.ClassI_Identifiability
+                                        S251Class.ClassII_GeographicalLocation
+                                        S251Class.ClassIII_IdentifyAndContact
+                                        S251Class.ClassIV_LinkingMultipleSources
+                                        S251Class.ClassV_AuditAndMonitoring
+                                        S251Class.ClassVI_GrantingAccess
+                                    ]
+                                    for s251Class in allS251Classes do
+                                        Html.label [
+                                            prop.className "flex items-center gap-2 mb-2"
+                                            prop.children [
+                                                Html.input [
+                                                    prop.type' "checkbox"
+                                                    prop.isChecked (app.S251Classes.Contains s251Class)
+                                                    prop.disabled true
+                                                ]
+                                                Html.span (string s251Class)
+                                            ]
+                                        ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+
+                // Detailed Information Section
+                Html.div [
+                    prop.className "mt-8 grid gap-8"
                     prop.children [
                         Html.div [
+                            prop.className "bg-gray-50 p-4 rounded-lg"
                             prop.children [
-                                Html.strong "Application Number: "
-                                Html.span app.ApplicationNumber
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Reference: "
-                                Html.span app.Reference
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Organisation: "
-                                Html.span app.ApplicantOrganisation
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Status: "
-                                Html.span app.Status
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Contact Name: "
-                                Html.span app.ContactName
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Address: "
-                                Html.span (String.concat ", " app.Address)
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Postcode: "
-                                Html.span app.Postcode
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Telephone: "
-                                Html.span app.Telephone
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Email: "
-                                Html.span app.Email
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Other References: "
-                                Html.span (Option.defaultValue "N/A" app.OtherRefs)
-                            ]
-                        ]
-                        Html.div [
-                            prop.className "grid grid-cols-2 gap-4"
-                            prop.children [
+                                Html.h3 [
+                                    prop.className "text-xl font-semibold mb-4"
+                                    prop.text "Detailed Information"
+                                ]
                                 Html.div [
-                                    prop.className "col-span-1"
+                                    prop.className "grid gap-6"
                                     prop.children [
-                                        Html.strong "Medical Purposes: "
                                         Html.div [
-                                            let allMedicalPurposes = [
-                                                MedicalPurpose.MedicalResearch
-                                                MedicalPurpose.PreventativeMedicine
-                                                MedicalPurpose.MedicalDiagnosis
-                                                MedicalPurpose.CareAndTreatment
-                                                MedicalPurpose.HealthAndSocialCareManagement
-                                                MedicalPurpose.InformingIndividuals
+                                            Html.strong "Cohort Description"
+                                            Html.div [
+                                                prop.className "mt-2 prose max-w-none"
+                                                prop.innerHtml (replaceNewlinesWithBr app.CohortDescription)
                                             ]
-                                            for purpose in allMedicalPurposes do
-                                                Html.label [
-                                                    prop.className "flex items-center"
-                                                    prop.children [
-                                                        Html.input [
-                                                            prop.type' "checkbox"
-                                                            prop.isChecked (app.MedicalPurposes.Contains purpose)
-                                                            prop.disabled true
-                                                        ]
-                                                        Html.span (string purpose)
-                                                    ]
-                                                ]
+                                        ]
+                                        Html.div [
+                                            Html.strong "Summary"
+                                            Html.div [
+                                                prop.className "mt-2 prose max-w-none"
+                                                prop.innerHtml (replaceNewlinesWithBr app.Summary)
+                                            ]
+                                        ]
+                                        Html.div [
+                                            Html.strong "Confidential Information"
+                                            Html.div [
+                                                prop.className "mt-2 prose max-w-none"
+                                                prop.innerHtml (replaceNewlinesWithBr app.ConfidentialInfo)
+                                            ]
+                                        ]
+
+                                        Html.div [
+                                            Html.strong "Notes"
+                                            Html.div [
+                                                prop.className "mt-2 prose max-w-none"
+                                                prop.innerHtml (replaceNewlinesWithBr app.Notes)
+                                            ]
                                         ]
                                     ]
-                                ]
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Cohort Description: "
-                                Html.div [
-                                    prop.innerHtml (replaceNewlinesWithBr app.CohortDescription)
-                                ]
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Confidential Info: "
-                                Html.div [
-                                    prop.innerHtml (replaceNewlinesWithBr app.ConfidentialInfo)
-                                ]
-                            ]
-                        ]
-                        Html.div [
-                            prop.className "grid grid-cols-2 gap-4"
-                            prop.children [
-                                Html.div [
-                                    prop.className "col-span-1"
-                                    prop.children [
-                                        Html.strong "S251 Classes: "
-                                        Html.div [
-                                            let allS251Classes = [
-                                                S251Class.SpecificSupport
-                                                S251Class.ClassI_Identifiability
-                                                S251Class.ClassII_GeographicalLocation
-                                                S251Class.ClassIII_IdentifyAndContact
-                                                S251Class.ClassIV_LinkingMultipleSources
-                                                S251Class.ClassV_AuditAndMonitoring
-                                                S251Class.ClassVI_GrantingAccess
-                                            ]
-                                            for s251Class in allS251Classes do
-                                                Html.label [
-                                                    prop.className "flex items-center"
-                                                    prop.children [
-                                                        Html.input [
-                                                            prop.type' "checkbox"
-                                                            prop.isChecked (app.S251Classes.Contains s251Class)
-                                                            prop.disabled true
-                                                        ]
-                                                        Html.span (string s251Class)
-                                                    ]
-                                                ]
-                                        ]
-                                    ]
-                                ]
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Sponsor: "
-                                Html.span app.Sponsor
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Outcome Date: "
-                                Html.span (Option.defaultValue "N/A" (Option.map string app.OutcomeDate))
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Next Review Date: "
-                                Html.span (Option.defaultValue "N/A" (Option.map string app.NextReviewDate))
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Notes: "
-                                Html.div [
-                                    prop.innerHtml (replaceNewlinesWithBr app.Notes)
-                                ]
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "NDOO: "
-                                Html.span (Option.defaultValue "N/A" app.NDOO)
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "English CPI: "
-                                Html.span (Option.defaultValue "N/A" (Option.map string app.EnglishCPI))
-                            ]
-                        ]
-                        Html.div [
-                            prop.children [
-                                Html.strong "Welsh CPI: "
-                                Html.span (Option.defaultValue "N/A" (Option.map string app.WelshCPI))
-                            ]
-                        ]
-                        Html.div [
-                            prop.className "col-span-2"
-                            prop.children [
-                                Html.strong "Summary: "
-                                Html.div [
-                                    prop.innerHtml (replaceNewlinesWithBr app.Summary)
                                 ]
                             ]
                         ]

@@ -4,13 +4,55 @@ open SAFE
 open Saturn
 open Shared
 open OfficeOpenXml // Ensure you have this for EPPlus
+open System
+open System.IO
 
 
 
 module CagRegisterXLSM =
-    let cagRegisterFile = "cag-register-research-master-2021_1uhwQyX.xlsm"
-    open System.IO
-    open ClosedXML.Excel
+    let findLatestExcelFile directory =
+        let excelExtensions = [".xlsm"; ".xlsx"; ".xls"]
+        let files =
+            Directory.GetFiles(directory)
+            |> Array.filter (fun f -> excelExtensions |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            |> Array.map (fun f -> FileInfo(f))
+            |> Array.sortByDescending (fun f -> f.LastWriteTime)
+            |> Array.toList
+
+        let rec tryLoadFile (remainingFiles: FileInfo list) (failedFiles: string list) =
+            match remainingFiles with
+            | [] -> Error (failedFiles |> List.rev)
+            | file :: rest ->
+                try
+                    use package = new ExcelPackage(file)
+                    // Try to access first worksheet to verify file is readable
+                    let _ = package.Workbook.Worksheets.[0]
+                    Ok {
+                        LoadedFile = file.Name
+                        LoadedDate = file.LastWriteTime
+                        FailedFiles = failedFiles |> List.rev
+                    }
+                with ex ->
+                    printfn "Failed to load %s: %s" file.Name ex.Message
+                    tryLoadFile rest (file.Name :: failedFiles)
+
+        tryLoadFile files []
+
+    let mutable currentLoadResult = None
+
+    let getExcelFile() =
+        let directory =
+            Environment.GetEnvironmentVariable("CAG_REGISTER_FILE_PATH")
+            |> Option.ofObj
+            |> Option.defaultValue "."
+            |> fun path -> if Directory.Exists(path) then path else "."
+
+        match findLatestExcelFile directory with
+        | Ok result ->
+            currentLoadResult <- Some result
+            Path.Combine(directory, result.LoadedFile)
+        | Error failures ->
+            failwithf "No valid Excel file found in directory. Tried files: %A" failures
 
     let getApplications(workbook: ExcelPackage) =
         let indexSheet = workbook.Workbook.Worksheets.[0] // Access the first worksheet
@@ -158,7 +200,7 @@ module CagRegisterXLSM =
             None
 
     let getApplicationDetails() =
-        use package = new ExcelPackage(new FileInfo(cagRegisterFile))
+        use package = new ExcelPackage(new FileInfo(getExcelFile()))
         let indexSheet = package.Workbook.Worksheets.[0]
         let applications = getApplications(package)
 
@@ -176,7 +218,7 @@ module CagRegisterXLSM =
         results |> Array.choose id |> List.ofArray
 
     let getFrontPageEntries () =
-        use workbook = new ExcelPackage(new FileInfo(cagRegisterFile))
+        use workbook = new ExcelPackage(new FileInfo(getExcelFile()))
         let indexSheet = workbook.Workbook.Worksheets.[0]
 
         [2..indexSheet.Dimension.End.Row]
@@ -275,6 +317,8 @@ module CagRegisterXLSM =
             )
         )
 
+    let getCurrentLoadResult() = currentLoadResult
+
 module Storage =
     let todos =
         ResizeArray [
@@ -310,6 +354,9 @@ let applicationsApi ctx = {
     }
     getDiscrepancies = fun () -> async {
         return CagRegisterXLSM.getDiscrepancies()
+    }
+    getFileLoadResult = fun () -> async {
+        return CagRegisterXLSM.getCurrentLoadResult()
     }
 }
 

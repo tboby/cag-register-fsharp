@@ -112,8 +112,15 @@ type ApplicationDiscrepancy = {
     Differences: ApplicationDiscrepancyDifferences
 }
 
+type FileLoadResult = {
+    LoadedFile: string
+    LoadedDate: DateTime
+    FailedFiles: string list
+}
+
 type ICagApplicationsApi = {
     getApplications: unit -> Async<CagApplication list>
     getFrontPageEntries: unit -> Async<CagFrontPageEntry list>
     getDiscrepancies: unit -> Async<ApplicationDiscrepancy list>
+    getFileLoadResult: unit -> Async<FileLoadResult option>
 }

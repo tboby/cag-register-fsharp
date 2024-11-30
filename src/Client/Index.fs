@@ -23,6 +23,7 @@ type Model = {
     Applications: RemoteData<CagApplication list>
     FrontPageEntries: RemoteData<CagFrontPageEntry list>
     Discrepancies: RemoteData<ApplicationDiscrepancy list>
+    FileLoadResult: RemoteData<FileLoadResult option>
     OpenTabs: TabState list
     ActiveTabId: string
 }
@@ -31,6 +32,7 @@ type Msg =
     | LoadApplications of ApiCall<unit, CagApplication list>
     | LoadFrontPageEntries of ApiCall<unit, CagFrontPageEntry list>
     | LoadDiscrepancies of ApiCall<unit, ApplicationDiscrepancy list>
+    | LoadFileResult of ApiCall<unit, FileLoadResult option>
     | OpenTab of TabContent
     | OpenAndFocusTab of TabContent
     | CloseTab of string
@@ -44,6 +46,7 @@ let init () =
         Applications = NotStarted
         FrontPageEntries = NotStarted
         Discrepancies = NotStarted
+        FileLoadResult = NotStarted
         OpenTabs = [
             { Id = "home"
               Title = "Applications"
@@ -51,7 +54,10 @@ let init () =
         ]
         ActiveTabId = "home"
     }
-    let cmd = LoadApplications(Start()) |> Cmd.ofMsg
+    let cmd = Cmd.batch [
+        LoadApplications(Start()) |> Cmd.ofMsg
+        LoadFileResult(Start()) |> Cmd.ofMsg
+    ]
     model, cmd
 let createShortTitle =
     function
@@ -91,6 +97,13 @@ let update msg model =
             { model with Discrepancies = Loading }, cmd
         | Finished discrepancies ->
             { model with Discrepancies = Loaded discrepancies }, Cmd.none
+    | LoadFileResult msg ->
+        match msg with
+        | Start () ->
+            let cmd = Cmd.OfAsync.perform applicationsApi.getFileLoadResult () (Finished >> LoadFileResult)
+            { model with FileLoadResult = Loading }, cmd
+        | Finished result ->
+            { model with FileLoadResult = Loaded result }, Cmd.none
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
@@ -729,6 +742,40 @@ module ViewComponents =
             ]
         ]
 
+    let fileLoadInfo (fileLoadResult: RemoteData<FileLoadResult option>) =
+        match fileLoadResult with
+        | Loaded (Some result) ->
+            Html.div [
+                prop.className "bg-white/80 rounded-md shadow-md p-4 mb-4"
+                prop.children [
+                    Html.div [
+                        prop.className "flex flex-col gap-2"
+                        prop.children [
+                            Html.div [
+                                Html.strong "Current file: "
+                                Html.span result.LoadedFile
+                            ]
+                            Html.div [
+                                Html.strong "Last modified: "
+                                Html.span (result.LoadedDate.ToString("yyyy-MM-dd HH:mm:ss"))
+                            ]
+                            if not (List.isEmpty result.FailedFiles) then
+                                Html.div [
+                                    Html.strong "Failed attempts: "
+                                    Html.ul [
+                                        prop.className "list-disc list-inside"
+                                        prop.children [
+                                            for file in result.FailedFiles ->
+                                                Html.li file
+                                        ]
+                                    ]
+                                ]
+                        ]
+                    ]
+                ]
+            ]
+        | _ -> Html.none
+
 let view model dispatch =
     Html.section [
         prop.className "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-x-hidden"
@@ -740,6 +787,9 @@ let view model dispatch =
                         prop.className "text-center text-5xl font-bold text-gray-800 mb-8"
                         prop.text "CAG Register"
                     ]
+
+                    // Add file load info
+                    ViewComponents.fileLoadInfo model.FileLoadResult
 
                     // Active tab content
                     match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with

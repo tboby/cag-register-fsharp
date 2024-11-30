@@ -79,21 +79,30 @@ let update msg model =
     | LoadApplications msg ->
         match msg with
         | Start () ->
-            let cmd = Cmd.OfAsync.perform applicationsApi.getApplications () (Finished >> LoadApplications)
+            let cmd = Cmd.batch [
+                Cmd.OfAsync.perform applicationsApi.getApplications () (Finished >> LoadApplications)
+                Cmd.ofMsg (LoadFileResult(Start()))
+            ]
             { model with Applications = Loading }, cmd
         | Finished apps ->
             { model with Applications = Loaded apps }, Cmd.none
     | LoadFrontPageEntries msg ->
         match msg with
         | Start () ->
-            let cmd = Cmd.OfAsync.perform applicationsApi.getFrontPageEntries () (Finished >> LoadFrontPageEntries)
+            let cmd = Cmd.batch [
+                Cmd.OfAsync.perform applicationsApi.getFrontPageEntries () (Finished >> LoadFrontPageEntries)
+                Cmd.ofMsg (LoadFileResult(Start()))
+            ]
             { model with FrontPageEntries = Loading }, cmd
         | Finished frontPageEntries ->
             { model with FrontPageEntries = Loaded frontPageEntries }, Cmd.none
     | LoadDiscrepancies msg ->
         match msg with
         | Start () ->
-            let cmd = Cmd.OfAsync.perform applicationsApi.getDiscrepancies () (Finished >> LoadDiscrepancies)
+            let cmd = Cmd.batch [
+                Cmd.OfAsync.perform applicationsApi.getDiscrepancies () (Finished >> LoadDiscrepancies)
+                Cmd.ofMsg (LoadFileResult(Start()))
+            ]
             { model with Discrepancies = Loading }, cmd
         | Finished discrepancies ->
             { model with Discrepancies = Loaded discrepancies }, Cmd.none
@@ -668,24 +677,31 @@ module ViewComponents =
         match tab.Content with
         | TableContent ->
             match model.Applications with
-            | Loaded apps -> applicationTable apps dispatch
+            | NotStarted ->
+                // Load both applications and file info when starting
+                dispatch (LoadApplications(Start()))
+                dispatch (LoadFileResult(Start()))
+                Html.div [
+                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                    prop.text "Loading..."
+                ]
             | Loading ->
                 Html.div [
                     prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
                     prop.text "Loading applications..."
                 ]
-            | NotStarted ->
-                Html.div [
-                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
-                    prop.text "Loading..."
-                ]
+            | Loaded apps -> applicationTable apps dispatch
         | ApplicationContent app ->
             applicationDetail app dispatch
         | DiscrepancyContent ->
             match model.Discrepancies with
-            | Loaded discrepancies -> discrepancyTable discrepancies dispatch
+            | NotStarted ->
+                // Load both discrepancies and file info when starting
+                dispatch (LoadDiscrepancies(Start()))
+                dispatch (LoadFileResult(Start()))
+                Html.div "Loading discrepancies..."
             | Loading -> Html.div "Loading discrepancies..."
-            | NotStarted -> Html.div "Loading discrepancies..."
+            | Loaded discrepancies -> discrepancyTable discrepancies dispatch
     let renderTab (tab: TabState) activeTabId dispatch =
         Html.div [
             prop.className [

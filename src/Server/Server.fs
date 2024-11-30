@@ -10,13 +10,26 @@ open System.IO
 
 
 module CagRegisterXLSM =
+    let getExcelLastModified (package: ExcelPackage) =
+        try
+            // Try to get the document properties
+            let props = package.Workbook.Properties
+            // Use the last modified date from Excel if available, otherwise fall back to created date
+            if props.Modified <> DateTime.MinValue then
+                props.Modified
+            elif props.Created <> DateTime.MinValue then
+                props.Created
+            else
+                DateTime.MinValue  // Return minimum date if neither is available
+        with _ ->
+            DateTime.MinValue
+
     let findLatestExcelFile directory =
         let excelExtensions = [".xlsm"; ".xlsx"; ".xls"]
         let files =
             Directory.GetFiles(directory)
             |> Array.filter (fun f -> excelExtensions |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
             |> Array.map (fun f -> FileInfo(f))
-            |> Array.sortByDescending (fun f -> f.LastWriteTime)
             |> Array.toList
 
         let rec tryLoadFile (remainingFiles: FileInfo list) (failedFiles: string list) =
@@ -27,16 +40,27 @@ module CagRegisterXLSM =
                     use package = new ExcelPackage(file)
                     // Try to access first worksheet to verify file is readable
                     let _ = package.Workbook.Worksheets.[0]
+                    let lastModified =
+                        let excelDate = getExcelLastModified package
+                        if excelDate = DateTime.MinValue then
+                            file.LastWriteTime  // Fall back to filesystem date
+                        else
+                            excelDate
                     Ok {
                         LoadedFile = file.Name
-                        LoadedDate = file.LastWriteTime
+                        LoadedDate = lastModified
                         FailedFiles = failedFiles |> List.rev
                     }
                 with ex ->
                     printfn "Failed to load %s: %s" file.Name ex.Message
                     tryLoadFile rest (file.Name :: failedFiles)
 
-        tryLoadFile files []
+        // Sort files by filesystem date initially, then try loading each
+        let sortedFiles =
+            files
+            |> List.sortByDescending (fun f -> f.LastWriteTime)
+
+        tryLoadFile sortedFiles []
 
     let mutable currentLoadResult = None
 

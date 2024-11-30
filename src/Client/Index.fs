@@ -242,18 +242,21 @@ module ViewComponents =
                             ColumnDef.headerName "App #"
                             ColumnDef.width 100
                             ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
+                            columnDefProp("sort", "desc")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Text
                             ColumnDef.headerName "Title"
                             ColumnDef.width 250
                             ColumnDef.valueGetter (fun x -> x.Title)
+                            columnDefProp("tooltipField", "Title")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Text
                             ColumnDef.headerName "Organisation"
                             ColumnDef.width 200
                             ColumnDef.valueGetter (fun x -> x.ApplicantOrganisation)
+                            columnDefProp("tooltipField", "ApplicantOrganisation")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Text
@@ -302,6 +305,7 @@ module ViewComponents =
                     AgGrid.paginationPageSize 10
                     //AgGrid.paginationAutoPageSize true
                     AgGrid.domLayout DOMLayout.AutoHeight
+                    agGridProp("tooltipShowDelay", 200)
                 ]
             ]
         ]

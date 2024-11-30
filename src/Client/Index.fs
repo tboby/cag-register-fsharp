@@ -50,11 +50,14 @@ let init () =
         Discrepancies = NotStarted
         FileLoadResult = NotStarted
         OpenTabs = [
-            { Id = "home"
-              Title = "Applications"
+            { Id = "research"
+              Title = "Research"
+              Content = TableContent }
+            { Id = "non-research"
+              Title = "Non-Research"
               Content = TableContent }
         ]
-        ActiveTabId = "home"
+        ActiveTabId = "research"
         CurrentRegisterType = Research
     }
     let cmd = Cmd.batch [
@@ -171,7 +174,23 @@ let update msg model =
                 ActiveTabId = if model.ActiveTabId = id then "home" else model.ActiveTabId
             }, Cmd.none
     | SetActiveTab tabId ->
-        { model with ActiveTabId = tabId }, Cmd.none
+        let registerType =
+            match tabId with
+            | "research" -> Research
+            | "non-research" -> NonResearch
+            | _ -> model.CurrentRegisterType
+
+        let cmd =
+            if tabId = "research" || tabId = "non-research" then
+                Cmd.batch [
+                    LoadApplications(Start(registerType)) |> Cmd.ofMsg
+                    LoadFileResult(Start(registerType)) |> Cmd.ofMsg
+                ]
+            else Cmd.none
+
+        { model with
+            ActiveTabId = tabId
+            CurrentRegisterType = registerType }, cmd
     | SwitchRegisterType registerType ->
         let cmd = Cmd.batch [
             LoadApplications(Start(registerType)) |> Cmd.ofMsg
@@ -727,7 +746,7 @@ module ViewComponents =
                     prop.className "mr-2"
                     prop.text tab.Title
                 ]
-                if tab.Id <> "home" then  // Don't show close button on home tab
+                if tab.Id <> "research" && tab.Id <> "non-research" then  // Only show close button for other tabs
                     Html.button [
                         prop.className "hover:text-red-500 ml-2"
                         prop.onClick (fun e ->
@@ -752,7 +771,7 @@ module ViewComponents =
                     prop.className "flex space-x-2 p-2"
                     prop.children [
                         for tab in tabs -> renderTab tab activeTabId dispatch
-                        if List.length (List.filter (fun t -> t.Id <> "home") tabs) > 1 then
+                        if List.length (List.filter (fun t -> t.Id <> "home") tabs) > 2 then
                             yield Html.button [
                                 prop.className "btn btn-danger ml-2"
                                 prop.onClick (fun _ ->
@@ -857,7 +876,6 @@ let view model dispatch =
                                             ]
                                         ]
                                     ]
-                                    ViewComponents.registerTypeSelector model.CurrentRegisterType dispatch
                                 ]
                             ]
                             ViewComponents.fileLoadInfo model.FileLoadResult

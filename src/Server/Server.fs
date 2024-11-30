@@ -24,11 +24,10 @@ module CagRegisterXLSM =
         with _ ->
             DateTime.MinValue
 
-    let findLatestExcelFile directory =
-        let excelExtensions = [".xlsm"; ".xlsx"; ".xls"]
+    let findLatestExcelFile directory pattern =
         let files =
-            Directory.GetFiles(directory)
-            |> Array.filter (fun f -> excelExtensions |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            Directory.GetFiles(directory, pattern)
+            |> Array.filter (fun f -> [".xlsm"; ".xlsx"; ".xls"] |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
             |> Array.map (fun f -> FileInfo(f))
             |> Array.toList
 
@@ -49,6 +48,7 @@ module CagRegisterXLSM =
                     Ok {
                         LoadedFile = file.Name
                         LoadedDate = lastModified
+                        RegisterType = NonResearch
                         FailedFiles = failedFiles |> List.rev
                     }
                 with ex ->
@@ -64,16 +64,21 @@ module CagRegisterXLSM =
 
     let mutable currentLoadResult = None
 
-    let getExcelFile() =
+    let getRegisterFilePath registerType =
         let directory =
             Environment.GetEnvironmentVariable("CAG_REGISTER_FILE_PATH")
             |> Option.ofObj
             |> Option.defaultValue "."
             |> fun path -> if Directory.Exists(path) then path else "."
 
-        match findLatestExcelFile directory with
+        let filePattern =
+            match registerType with
+            | Research -> "*research*.xls*"
+            | NonResearch -> "*non-research*.xls*"
+
+        match findLatestExcelFile directory filePattern with
         | Ok result ->
-            currentLoadResult <- Some result
+            currentLoadResult <- Some { result with RegisterType = registerType }
             Path.Combine(directory, result.LoadedFile)
         | Error failures ->
             failwithf "No valid Excel file found in directory. Tried files: %A" failures
@@ -161,10 +166,32 @@ module CagRegisterXLSM =
         |> Option.map (fun isHidden -> if isHidden then Obsolete else Active)
         |> Option.defaultValue Active
 
-    let parseApplication (sheet: ExcelWorksheet) (indexSheet: ExcelWorksheet) =
+    let getCellReferences registerType =
+        match registerType with
+        | Research ->
+            {|
+                OutcomeDate = "B34"
+                NextReviewDate = "B35"
+                Notes = "B36"
+                NDOO = "B37"
+                EnglishCPI = "B38"
+                WelshCPI = "B39"
+            |}
+        | NonResearch ->
+            {|
+                OutcomeDate = "B33"  // One row up for non-research
+                NextReviewDate = "B34"
+                Notes = "B35"
+                NDOO = "B36"
+                EnglishCPI = "B37"
+                WelshCPI = "B38"
+            |}
+
+    let parseApplication (sheet: ExcelWorksheet) (indexSheet: ExcelWorksheet) registerType =
         try
             let appNo = sheet.Cells.["B3"].Text
             let appStatus = getHiddenRowStatus indexSheet appNo
+            let cellRefs = getCellReferences registerType
             let app = {
                 ApplicationNumber = appNo
                 Reference = sheet.Cells.["B4"].Text
@@ -195,23 +222,23 @@ module CagRegisterXLSM =
                 Sponsor = sheet.Cells.["B31"].Text // Use string access
                 Status = sheet.Cells.["B32"].Text // Use string access
                 OutcomeDate =
-                    try Some(sheet.Cells.["B34"].GetValue<System.DateTime>()) // Use string access
+                    try Some(sheet.Cells.[cellRefs.OutcomeDate].GetValue<System.DateTime>())
                     with _ -> None
                 NextReviewDate =
-                    try Some(sheet.Cells.["B35"].GetValue<System.DateTime>()) // Use string access
+                    try Some(sheet.Cells.[cellRefs.NextReviewDate].GetValue<System.DateTime>())
                     with _ -> None
-                Notes = sheet.Cells.["B36"].Text // Use string access
+                Notes = sheet.Cells.[cellRefs.Notes].Text
                 NDOO =
-                    let value = sheet.Cells.["B37"].Text // Use string access
+                    let value = sheet.Cells.[cellRefs.NDOO].Text
                     if System.String.IsNullOrWhiteSpace(value) then None else Some value
                 EnglishCPI =
-                    let value = sheet.Cells.["B38"].Text // Use string access
+                    let value = sheet.Cells.[cellRefs.EnglishCPI].Text
                     if System.String.IsNullOrWhiteSpace(value) then None
                     else if value = "Yes" then Some CPIValue.Yes
                     else if value = "No" then Some CPIValue.No
                     else Some (CPIValue.Other value)
                 WelshCPI =
-                    let value = sheet.Cells.["B39"].Text // Use string access
+                    let value = sheet.Cells.[cellRefs.WelshCPI].Text
                     if System.String.IsNullOrWhiteSpace(value) then None
                     else if value = "Yes" then Some CPIValue.Yes
                     else if value = "No" then Some CPIValue.No
@@ -223,27 +250,55 @@ module CagRegisterXLSM =
             printfn "Error parsing application: %s" ex.Message
             None
 
-    let getApplicationDetails() =
-        use package = new ExcelPackage(new FileInfo(getExcelFile()))
+    let getApplicationDetails registerType =
+        use package = new ExcelPackage(new FileInfo(getRegisterFilePath registerType))
         let indexSheet = package.Workbook.Worksheets.[0]
         let applications = getApplications(package)
 
-        // Read application details in parallel
         let tasks =
             applications
             |> List.map (fun (appNo, sheet) ->
                 async {
-                    return parseApplication sheet indexSheet
+                    return parseApplication sheet indexSheet registerType
                 }
             )
 
-        // Run tasks in parallel and collect results
         let results = Async.Parallel tasks |> Async.RunSynchronously
         results |> Array.choose id |> List.ofArray
 
-    let getFrontPageEntries () =
-        use workbook = new ExcelPackage(new FileInfo(getExcelFile()))
+    let getFrontPageColumnIndices registerType =
+        match registerType with
+        | Research ->
+            {|
+                Reference = 2
+                Title = 3
+                Status = 4
+                OutcomeDate = Some 5
+                NextReviewDate = 6
+                Contact = 7
+                Organisation = 8
+                NDOO = 9
+                EnglishCPI = 10
+                WelshCPI = 11
+            |}
+        | NonResearch ->
+            {|
+                Reference = 2
+                Title = 3
+                Status = 4
+                OutcomeDate = None  // No outcome date for non-research
+                NextReviewDate = 5  // Shifted up by one
+                Contact = 6
+                Organisation = 7
+                NDOO = 8
+                EnglishCPI = 9
+                WelshCPI = 10
+            |}
+
+    let getFrontPageEntries registerType =
+        use workbook = new ExcelPackage(new FileInfo(getRegisterFilePath registerType))
         let indexSheet = workbook.Workbook.Worksheets.[0]
+        let columns = getFrontPageColumnIndices registerType
 
         [2..indexSheet.Dimension.End.Row]
         |> List.choose (fun row ->
@@ -254,28 +309,31 @@ module CagRegisterXLSM =
                     let isHidden = indexSheet.Row(row).Hidden
                     Some {
                         ApplicationNumber = appNo
-                        Reference = indexSheet.Cells.[row, 2].Text
-                        Title = indexSheet.Cells.[row, 3].Text
-                        Status = indexSheet.Cells.[row, 4].Text
+                        Reference = indexSheet.Cells.[row, columns.Reference].Text
+                        Title = indexSheet.Cells.[row, columns.Title].Text
+                        Status = indexSheet.Cells.[row, columns.Status].Text
                         OutcomeDate =
-                            try Some(indexSheet.Cells.[row, 5].GetValue<System.DateTime>())
-                            with _ -> None
+                            match columns.OutcomeDate with
+                            | Some col ->
+                                try Some(indexSheet.Cells.[row, col].GetValue<System.DateTime>())
+                                with _ -> None
+                            | None -> None
                         NextReviewDate =
-                            try Some(indexSheet.Cells.[row, 6].GetValue<System.DateTime>())
+                            try Some(indexSheet.Cells.[row, columns.NextReviewDate].GetValue<System.DateTime>())
                             with _ -> None
-                        Contact = indexSheet.Cells.[row, 7].Text
-                        Organisation = indexSheet.Cells.[row, 8].Text
+                        Contact = indexSheet.Cells.[row, columns.Contact].Text
+                        Organisation = indexSheet.Cells.[row, columns.Organisation].Text
                         NationalDataOptOutStatus =
-                            let value = indexSheet.Cells.[row, 9].Text
+                            let value = indexSheet.Cells.[row, columns.NDOO].Text
                             if System.String.IsNullOrWhiteSpace(value) then None
                             else Some value
                         EnglishConfidentialPatientInfo =
-                            match indexSheet.Cells.[row, 10].Text.ToLowerInvariant() with
+                            match indexSheet.Cells.[row, columns.EnglishCPI].Text.ToLowerInvariant() with
                             | "yes" -> Some true
                             | "no" -> Some false
                             | _ -> None
                         WelshConfidentialPatientInfo =
-                            match indexSheet.Cells.[row, 11].Text.ToLowerInvariant() with
+                            match indexSheet.Cells.[row, columns.WelshCPI].Text.ToLowerInvariant() with
                             | "yes" -> Some true
                             | "no" -> Some false
                             | _ -> None
@@ -286,9 +344,9 @@ module CagRegisterXLSM =
                     None
         )
 
-    let getDiscrepancies () =
-        let frontPage = getFrontPageEntries()
-        let details = getApplicationDetails()
+    let getDiscrepancies registerType =
+        let frontPage = getFrontPageEntries registerType
+        let details = getApplicationDetails registerType
 
         frontPage
         |> List.choose (fun front ->
@@ -341,7 +399,8 @@ module CagRegisterXLSM =
             )
         )
 
-    let getCurrentLoadResult() = currentLoadResult
+    let getCurrentLoadResult registerType =
+        currentLoadResult |> Option.filter (fun r -> r.RegisterType = registerType)
 
 module Storage =
     let todos =
@@ -370,17 +429,17 @@ let todosApi ctx = {
 }
 
 let applicationsApi ctx = {
-    getApplications = fun () -> async {
-        return CagRegisterXLSM.getApplicationDetails()
+    getApplications = fun registerType -> async {
+        return CagRegisterXLSM.getApplicationDetails registerType
     }
-    getFrontPageEntries = fun () -> async {
-        return CagRegisterXLSM.getFrontPageEntries()
+    getFrontPageEntries = fun registerType -> async {
+        return CagRegisterXLSM.getFrontPageEntries registerType
     }
-    getDiscrepancies = fun () -> async {
-        return CagRegisterXLSM.getDiscrepancies()
+    getDiscrepancies = fun registerType -> async {
+        return CagRegisterXLSM.getDiscrepancies registerType
     }
-    getFileLoadResult = fun () -> async {
-        return CagRegisterXLSM.getCurrentLoadResult()
+    getFileLoadResult = fun registerType -> async {
+        return CagRegisterXLSM.getCurrentLoadResult registerType
     }
 }
 

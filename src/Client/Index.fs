@@ -26,17 +26,19 @@ type Model = {
     FileLoadResult: RemoteData<FileLoadResult option>
     OpenTabs: TabState list
     ActiveTabId: string
+    CurrentRegisterType: RegisterType
 }
 
 type Msg =
-    | LoadApplications of ApiCall<unit, CagApplication list>
-    | LoadFrontPageEntries of ApiCall<unit, CagFrontPageEntry list>
-    | LoadDiscrepancies of ApiCall<unit, ApplicationDiscrepancy list>
-    | LoadFileResult of ApiCall<unit, FileLoadResult option>
+    | LoadApplications of ApiCall<RegisterType, CagApplication list>
+    | LoadFrontPageEntries of ApiCall<RegisterType, CagFrontPageEntry list>
+    | LoadDiscrepancies of ApiCall<RegisterType, ApplicationDiscrepancy list>
+    | LoadFileResult of ApiCall<RegisterType, FileLoadResult option>
     | OpenTab of TabContent
     | OpenAndFocusTab of TabContent
     | CloseTab of string
     | SetActiveTab of string
+    | SwitchRegisterType of RegisterType
 
 
 let applicationsApi =
@@ -53,10 +55,11 @@ let init () =
               Content = TableContent }
         ]
         ActiveTabId = "home"
+        CurrentRegisterType = Research
     }
     let cmd = Cmd.batch [
-        LoadApplications(Start()) |> Cmd.ofMsg
-        LoadFileResult(Start()) |> Cmd.ofMsg
+        LoadApplications(Start(Research)) |> Cmd.ofMsg
+        LoadFileResult(Start(Research)) |> Cmd.ofMsg
     ]
     model, cmd
 let createShortTitle =
@@ -78,38 +81,38 @@ let update msg model =
     match msg with
     | LoadApplications msg ->
         match msg with
-        | Start () ->
+        | Start registerType ->
             let cmd = Cmd.batch [
-                Cmd.OfAsync.perform applicationsApi.getApplications () (Finished >> LoadApplications)
-                Cmd.ofMsg (LoadFileResult(Start()))
+                Cmd.OfAsync.perform applicationsApi.getApplications registerType (Finished >> LoadApplications)
+                Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
             { model with Applications = Loading }, cmd
         | Finished apps ->
             { model with Applications = Loaded apps }, Cmd.none
     | LoadFrontPageEntries msg ->
         match msg with
-        | Start () ->
+        | Start registerType ->
             let cmd = Cmd.batch [
-                Cmd.OfAsync.perform applicationsApi.getFrontPageEntries () (Finished >> LoadFrontPageEntries)
-                Cmd.ofMsg (LoadFileResult(Start()))
+                Cmd.OfAsync.perform applicationsApi.getFrontPageEntries registerType (Finished >> LoadFrontPageEntries)
+                Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
             { model with FrontPageEntries = Loading }, cmd
         | Finished frontPageEntries ->
             { model with FrontPageEntries = Loaded frontPageEntries }, Cmd.none
     | LoadDiscrepancies msg ->
         match msg with
-        | Start () ->
+        | Start registerType ->
             let cmd = Cmd.batch [
-                Cmd.OfAsync.perform applicationsApi.getDiscrepancies () (Finished >> LoadDiscrepancies)
-                Cmd.ofMsg (LoadFileResult(Start()))
+                Cmd.OfAsync.perform applicationsApi.getDiscrepancies registerType (Finished >> LoadDiscrepancies)
+                Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
             { model with Discrepancies = Loading }, cmd
         | Finished discrepancies ->
             { model with Discrepancies = Loaded discrepancies }, Cmd.none
     | LoadFileResult msg ->
         match msg with
-        | Start () ->
-            let cmd = Cmd.OfAsync.perform applicationsApi.getFileLoadResult () (Finished >> LoadFileResult)
+        | Start registerType ->
+            let cmd = Cmd.OfAsync.perform applicationsApi.getFileLoadResult registerType (Finished >> LoadFileResult)
             { model with FileLoadResult = Loading }, cmd
         | Finished result ->
             { model with FileLoadResult = Loaded result }, Cmd.none
@@ -133,7 +136,7 @@ let update msg model =
             { model with OpenTabs = model.OpenTabs @ [newTab]; ActiveTabId = id },
             match content with
             | DiscrepancyContent ->
-                Cmd.ofMsg (LoadDiscrepancies(Start()))
+                Cmd.ofMsg (LoadDiscrepancies(Start(model.CurrentRegisterType)))
             | _ -> Cmd.none
 
     | OpenTab content ->
@@ -156,7 +159,7 @@ let update msg model =
             { model with OpenTabs = model.OpenTabs @ [newTab] },
             match content with
             | DiscrepancyContent ->
-                Cmd.ofMsg (LoadDiscrepancies(Start()))
+                Cmd.ofMsg (LoadDiscrepancies(Start(model.CurrentRegisterType)))
             | _ -> Cmd.none
     | CloseTab id ->
         if id = "home" then
@@ -169,6 +172,15 @@ let update msg model =
             }, Cmd.none
     | SetActiveTab tabId ->
         { model with ActiveTabId = tabId }, Cmd.none
+    | SwitchRegisterType registerType ->
+        let cmd = Cmd.batch [
+            LoadApplications(Start(registerType)) |> Cmd.ofMsg
+            LoadFileResult(Start(registerType)) |> Cmd.ofMsg
+        ]
+        { model with
+            CurrentRegisterType = registerType
+            Applications = Loading
+            FileLoadResult = Loading }, cmd
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
@@ -196,7 +208,7 @@ module ViewComponents =
             ]
         ]
 
-    let applicationTable (apps: CagApplication list) dispatch =
+    let applicationTable (apps: CagApplication list) (registerType: RegisterType) dispatch =
         Html.div [
             prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
             prop.children [
@@ -211,7 +223,6 @@ module ViewComponents =
                     ]
                 ]
                 AgGrid.grid [
-                    //agGridProp("paginationPageSizeSelector", seq{yield 10})
                     AgGrid.rowData (apps |> Array.ofList)
                     AgGrid.defaultColDef [
                         ColumnDef.resizable true
@@ -289,7 +300,7 @@ module ViewComponents =
                             ColumnDef.filter RowFilter.Text
                             ColumnDef.headerName "Status"
                             ColumnDef.width 150
-                            ColumnDef.valueGetter (fun x -> x.Status)
+                            ColumnDef.valueGetter (fun (x : CagApplication) -> x.Status)
                             ColumnDef.cellRenderer (fun cellParams ->
                                 match cellParams.data with
                                 | Some app ->
@@ -315,17 +326,18 @@ module ViewComponents =
                                 | None -> Html.none
                             )
                         ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Date
-                            ColumnDef.headerName "Outcome Date"
-                            ColumnDef.width 150
-                            ColumnDef.valueGetter (fun x -> x.OutcomeDate)
-                            ColumnDef.valueFormatter (fun valueParams ->
-                                match Option.flatten valueParams.value with
-                                | Some date -> date.Format("yyyy-MM-dd")
-                                | None -> "")
-                            columnDefProp("sort", "desc")
-                        ]
+                        if registerType = Research then
+                            ColumnDef.create [
+                                ColumnDef.filter RowFilter.Date
+                                ColumnDef.headerName "Outcome Date"
+                                ColumnDef.width 150
+                                ColumnDef.valueGetter (fun (x : CagApplication) -> x.OutcomeDate)
+                                ColumnDef.valueFormatter (fun valueParams ->
+                                    match Option.flatten valueParams.value with
+                                    | Some date -> date.Format("yyyy-MM-dd")
+                                    | None -> "")
+                                columnDefProp("sort", "desc")
+                            ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Date
                             ColumnDef.headerName "Next Review Date"
@@ -334,7 +346,7 @@ module ViewComponents =
                                 match Option.flatten valueParams.value with
                                 | Some (date : DateTime) -> date.Format("yyyy-MM-dd")
                                 | None -> "")
-                            ColumnDef.valueGetter (fun x -> x.NextReviewDate)
+                            ColumnDef.valueGetter (fun (x : CagApplication) -> x.NextReviewDate)
                         ]
 
                     ]
@@ -678,9 +690,8 @@ module ViewComponents =
         | TableContent ->
             match model.Applications with
             | NotStarted ->
-                // Load both applications and file info when starting
-                dispatch (LoadApplications(Start()))
-                dispatch (LoadFileResult(Start()))
+                dispatch (LoadApplications(Start(model.CurrentRegisterType)))
+                dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
                 Html.div [
                     prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
                     prop.text "Loading..."
@@ -690,15 +701,14 @@ module ViewComponents =
                     prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
                     prop.text "Loading applications..."
                 ]
-            | Loaded apps -> applicationTable apps dispatch
+            | Loaded apps -> applicationTable apps model.CurrentRegisterType dispatch
         | ApplicationContent app ->
             applicationDetail app dispatch
         | DiscrepancyContent ->
             match model.Discrepancies with
             | NotStarted ->
-                // Load both discrepancies and file info when starting
-                dispatch (LoadDiscrepancies(Start()))
-                dispatch (LoadFileResult(Start()))
+                dispatch (LoadDiscrepancies(Start(model.CurrentRegisterType)))
+                dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
                 Html.div "Loading discrepancies..."
             | Loading -> Html.div "Loading discrepancies..."
             | Loaded discrepancies -> discrepancyTable discrepancies dispatch
@@ -792,6 +802,29 @@ module ViewComponents =
             ]
         | _ -> Html.none
 
+    let registerTypeSelector (currentType: RegisterType) dispatch =
+        Html.div [
+            prop.className "flex gap-2 mb-4"
+            prop.children [
+                Html.button [
+                    prop.className [
+                        "btn"
+                        if currentType = Research then "btn-primary" else "btn-outline"
+                    ]
+                    prop.onClick (fun _ -> dispatch (SwitchRegisterType Research))
+                    prop.text "Research Register"
+                ]
+                Html.button [
+                    prop.className [
+                        "btn"
+                        if currentType = NonResearch then "btn-primary" else "btn-outline"
+                    ]
+                    prop.onClick (fun _ -> dispatch (SwitchRegisterType NonResearch))
+                    prop.text "Non-Research Register"
+                ]
+            ]
+        ]
+
 let view model dispatch =
     Html.section [
         prop.className "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-x-hidden"
@@ -818,13 +851,9 @@ let view model dispatch =
                                             ]
                                         ]
                                     ]
-                                    Html.div [
-                                        prop.className "text-gray-500 text-xs tracking-wider uppercase"
-                                        prop.text "Unofficial Viewer"
-                                    ]
+                                    ViewComponents.registerTypeSelector model.CurrentRegisterType dispatch
                                 ]
                             ]
-                            // File load info moved to the right side
                             ViewComponents.fileLoadInfo model.FileLoadResult
                         ]
                     ]

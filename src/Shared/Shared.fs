@@ -112,15 +112,20 @@ type ApplicationDiscrepancy = {
     Differences: ApplicationDiscrepancyDifferences
 }
 
+type RegisterType =
+    | Research
+    | NonResearch
+
 type FileLoadResult = {
     LoadedFile: string
     LoadedDate: DateTime
+    RegisterType: RegisterType
     FailedFiles: string list
 }
 
 type ICagApplicationsApi = {
-    getApplications: unit -> Async<CagApplication list>
-    getFrontPageEntries: unit -> Async<CagFrontPageEntry list>
-    getDiscrepancies: unit -> Async<ApplicationDiscrepancy list>
-    getFileLoadResult: unit -> Async<FileLoadResult option>
+    getApplications: RegisterType -> Async<CagApplication list>
+    getFrontPageEntries: RegisterType -> Async<CagFrontPageEntry list>
+    getDiscrepancies: RegisterType -> Async<ApplicationDiscrepancy list>
+    getFileLoadResult: RegisterType -> Async<FileLoadResult option>
 }

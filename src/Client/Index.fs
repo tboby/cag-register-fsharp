@@ -5,6 +5,8 @@ open SAFE
 open Shared
 open Feliz
 open Feliz.AgGrid
+open Fable.DateFunctions
+open System
 
 type TabContent =
     | TableContent
@@ -280,24 +282,25 @@ module ViewComponents =
                             ColumnDef.width 150
                             ColumnDef.valueGetter (fun x -> x.OutcomeDate)
                             ColumnDef.valueFormatter (fun valueParams ->
-                                valueParams.value
-                                |> Option.map string
-                                |> Option.defaultValue "")
+                                match Option.flatten valueParams.value with
+                                | Some date -> date.Format("yyyy-MM-dd")
+                                | None -> "")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Date
                             ColumnDef.headerName "Next Review Date"
                             ColumnDef.width 150
-                            ColumnDef.valueGetter (fun x -> x.NextReviewDate)
                             ColumnDef.valueFormatter (fun valueParams ->
-                                valueParams.value
-                                |> Option.map string
-                                |> Option.defaultValue "")
+                                match Option.flatten valueParams.value with
+                                | Some (date : DateTime) -> date.Format("yyyy-MM-dd")
+                                | None -> "")
+                            ColumnDef.valueGetter (fun x -> x.NextReviewDate)
                         ]
+
                     ]
                     AgGrid.pagination true
-                    //AgGrid.paginationPageSize 10
-                    AgGrid.paginationAutoPageSize true
+                    AgGrid.paginationPageSize 10
+                    //AgGrid.paginationAutoPageSize true
                     AgGrid.domLayout DOMLayout.AutoHeight
                 ]
             ]

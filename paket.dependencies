@@ -5,6 +5,7 @@ storage: none
 nuget ClosedXML
 nuget EPPlus
 nuget Expecto ~> 9
+nuget Fable.DateFunctions
 nuget Feliz.AgGrid
 nuget Microsoft.NET.Test.Sdk
 nuget SAFE.Server ~> 5

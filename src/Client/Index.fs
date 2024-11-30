@@ -196,6 +196,11 @@ module ViewComponents =
                         ColumnDef.sortable true
                         ColumnDef.filter RowFilter.Text
                     ]
+                    agGridProp("rowClassRules", {| ``opacity-50`` = (fun (rowParams : ICellRendererParams<_, _>) ->
+                        match rowParams.data with
+                        | Some app when app.ApplicationStatus = Obsolete -> true
+                        | _ -> false
+                    ) |})
                     AgGrid.columnDefs [
                         ColumnDef.create [
                             ColumnDef.headerName ""
@@ -268,14 +273,23 @@ module ViewComponents =
                                 match cellParams.data with
                                 | Some app ->
                                     Html.div [
-                                        prop.className (
+                                        prop.className [
                                             match (string app.Status).ToLower() with
                                             | s when s.Contains("approved") -> "badge badge-success"
                                             | s when s.Contains("pending") -> "badge badge-warning"
                                             | s when s.Contains("rejected") -> "badge badge-error"
                                             | _ -> "badge"
-                                        )
-                                        prop.text (string app.Status)
+                                        ]
+                                        prop.children [
+                                            Html.span [
+                                                prop.text (string app.Status)
+                                            ]
+                                            if app.ApplicationStatus = Obsolete then
+                                                Html.span [
+                                                    prop.className "ml-2 text-xs"
+                                                    prop.text "(Hidden)"
+                                                ]
+                                        ]
                                     ]
                                 | None -> Html.none
                             )
@@ -326,15 +340,28 @@ module ViewComponents =
 
     let applicationDetail (app: CagApplication) dispatch =
         Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
+            prop.className [
+                "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
+                if app.ApplicationStatus = Obsolete then "opacity-50"
+            ]
             prop.children [
                 // Header Section
                 Html.div [
                     prop.className "mb-8 border-b pb-4"
                     prop.children [
-                        Html.h2 [
-                            prop.className "text-3xl font-bold break-words mb-4"
-                            prop.text app.Title
+                        Html.div [
+                            prop.className "flex justify-between items-center"
+                            prop.children [
+                                Html.h2 [
+                                    prop.className "text-3xl font-bold break-words mb-4"
+                                    prop.text app.Title
+                                ]
+                                if app.ApplicationStatus = Obsolete then
+                                    Html.div [
+                                        prop.className "badge badge-warning"
+                                        prop.text "Obsolete Record"
+                                    ]
+                            ]
                         ]
                         Html.div [
                             prop.className "grid grid-cols-2 md:grid-cols-4 gap-4"

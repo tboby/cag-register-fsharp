@@ -43,6 +43,10 @@ type CPIValue =
     | No
     | Other of string
 
+type ApplicationStatus =
+    | Active
+    | Obsolete
+
 type CagApplication = {
     ApplicationNumber: string
     Reference: string
@@ -71,6 +75,7 @@ type CagApplication = {
     NDOO: string option
     EnglishCPI: CPIValue option
     WelshCPI: CPIValue option
+    ApplicationStatus: ApplicationStatus
 }
 
 type CagFrontPageEntry = {
@@ -85,6 +90,7 @@ type CagFrontPageEntry = {
     NationalDataOptOutStatus: string option
     EnglishConfidentialPatientInfo: bool option
     WelshConfidentialPatientInfo: bool option
+    ApplicationStatus: ApplicationStatus
 }
 
 type ApplicationDiscrepancyDifferences = {

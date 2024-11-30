@@ -85,11 +85,23 @@ module CagRegisterXLSM =
                 (actualValues, rawMatchedValues, rawNotMatchedValues)
 
         classes
-    let parseApplication (sheet: ExcelWorksheet) =
+
+    let getHiddenRowStatus (indexSheet: ExcelWorksheet) (appNo: string) =
+        [2..indexSheet.Dimension.End.Row]
+        |> List.tryFind (fun row ->
+            indexSheet.Cells.[row, 1].Text = appNo
+        )
+        |> Option.map (fun row -> indexSheet.Row(row).Hidden)
+        |> Option.map (fun isHidden -> if isHidden then Obsolete else Active)
+        |> Option.defaultValue Active
+
+    let parseApplication (sheet: ExcelWorksheet) (indexSheet: ExcelWorksheet) =
         try
+            let appNo = sheet.Cells.["B3"].Text
+            let appStatus = getHiddenRowStatus indexSheet appNo
             let app = {
-                ApplicationNumber = sheet.Cells.["B3"].Text // Use string access
-                Reference = sheet.Cells.["B4"].Text // Use string access
+                ApplicationNumber = appNo
+                Reference = sheet.Cells.["B4"].Text
                 OtherRefs =
                     let refs = sheet.Cells.["B5"].Text // Use string access
                     if System.String.IsNullOrWhiteSpace(refs) then None else Some refs
@@ -138,6 +150,7 @@ module CagRegisterXLSM =
                     else if value = "Yes" then Some CPIValue.Yes
                     else if value = "No" then Some CPIValue.No
                     else Some (CPIValue.Other value)
+                ApplicationStatus = appStatus
             }
             Some app
         with ex ->
@@ -145,7 +158,8 @@ module CagRegisterXLSM =
             None
 
     let getApplicationDetails() =
-        use package = new ExcelPackage(new FileInfo(cagRegisterFile)) // Change to EPPlus syntax
+        use package = new ExcelPackage(new FileInfo(cagRegisterFile))
+        let indexSheet = package.Workbook.Worksheets.[0]
         let applications = getApplications(package)
 
         // Read application details in parallel
@@ -153,13 +167,13 @@ module CagRegisterXLSM =
             applications
             |> List.map (fun (appNo, sheet) ->
                 async {
-                    return parseApplication sheet
+                    return parseApplication sheet indexSheet
                 }
             )
 
         // Run tasks in parallel and collect results
         let results = Async.Parallel tasks |> Async.RunSynchronously
-        results |> Array.choose id |> List.ofArray // Filter out None values
+        results |> Array.choose id |> List.ofArray
 
     let getFrontPageEntries () =
         use workbook = new ExcelPackage(new FileInfo(cagRegisterFile))
@@ -171,6 +185,7 @@ module CagRegisterXLSM =
             if System.String.IsNullOrWhiteSpace(appNo) then None
             else
                 try
+                    let isHidden = indexSheet.Row(row).Hidden
                     Some {
                         ApplicationNumber = appNo
                         Reference = indexSheet.Cells.[row, 2].Text
@@ -198,6 +213,7 @@ module CagRegisterXLSM =
                             | "yes" -> Some true
                             | "no" -> Some false
                             | _ -> None
+                        ApplicationStatus = if isHidden then Obsolete else Active
                     }
                 with ex ->
                     printfn "Error parsing front page row %d: %s" row ex.Message

@@ -851,6 +851,10 @@ let view model dispatch =
                                                 prop.className "font-extralight"
                                                 prop.text "Register"
                                             ]
+                                            Html.div [
+                                                prop.className "text-gray-500 text-xs tracking-wider uppercase"
+                                                prop.text "Unofficial Viewer"
+                                            ]
                                         ]
                                     ]
                                     ViewComponents.registerTypeSelector model.CurrentRegisterType dispatch

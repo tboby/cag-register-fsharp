@@ -183,12 +183,13 @@ module ViewComponents =
                     prop.children [
                         Html.button [
                             prop.className "btn btn-primary"
-                            prop.onClick (fun _ -> dispatch (OpenTab DiscrepancyContent))
+                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
                             prop.text "View Discrepancies"
                         ]
                     ]
                 ]
                 AgGrid.grid [
+                    //agGridProp("paginationPageSizeSelector", seq{yield 10})
                     AgGrid.rowData (apps |> Array.ofList)
                     AgGrid.defaultColDef [
                         ColumnDef.resizable true
@@ -310,6 +311,9 @@ module ViewComponents =
             ]
         ]
 
+    let replaceNewlinesWithBr (text: string) =
+        text.Replace("\n", "<br />")
+
     let applicationDetail (app: CagApplication) dispatch =
         Html.div [
             prop.className "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
@@ -422,13 +426,17 @@ module ViewComponents =
                         Html.div [
                             prop.children [
                                 Html.strong "Cohort Description: "
-                                Html.span app.CohortDescription
+                                Html.div [
+                                    prop.innerHtml (replaceNewlinesWithBr app.CohortDescription)
+                                ]
                             ]
                         ]
                         Html.div [
                             prop.children [
                                 Html.strong "Confidential Info: "
-                                Html.span app.ConfidentialInfo
+                                Html.div [
+                                    prop.innerHtml (replaceNewlinesWithBr app.ConfidentialInfo)
+                                ]
                             ]
                         ]
                         Html.div [
@@ -486,7 +494,9 @@ module ViewComponents =
                         Html.div [
                             prop.children [
                                 Html.strong "Notes: "
-                                Html.span app.Notes
+                                Html.div [
+                                    prop.innerHtml (replaceNewlinesWithBr app.Notes)
+                                ]
                             ]
                         ]
                         Html.div [
@@ -511,7 +521,9 @@ module ViewComponents =
                             prop.className "col-span-2"
                             prop.children [
                                 Html.strong "Summary: "
-                                Html.p app.Summary
+                                Html.div [
+                                    prop.innerHtml (replaceNewlinesWithBr app.Summary)
+                                ]
                             ]
                         ]
                     ]
@@ -540,8 +552,8 @@ module ViewComponents =
                                     Html.tr [
                                         Html.td disc.ApplicationNumber
                                         Html.td fieldName
-                                        Html.td frontValue
-                                        Html.td detailValue
+                                        Html.td (Html.div [ prop.innerHtml (replaceNewlinesWithBr frontValue) ])
+                                        Html.td (Html.div [ prop.innerHtml (replaceNewlinesWithBr detailValue) ])
                                     ]
 
                                 if disc.Differences.Title then

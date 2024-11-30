@@ -191,90 +191,114 @@ module ViewComponents =
                     AgGrid.defaultColDef [
                         ColumnDef.resizable true
                         ColumnDef.sortable true
-                        ColumnDef.filter (RowFilter.Text)
-                        //ColumnDef.filter
+                        ColumnDef.filter RowFilter.Text
                     ]
                     AgGrid.columnDefs [
-                        ColumnDef.create<string> [
-                            ColumnDef.field "ApplicationNumber"
-                            ColumnDef.headerName "App #"
-                            ColumnDef.width 120
+                        ColumnDef.create [
+                            ColumnDef.headerName ""
+                            ColumnDef.width 60
+                            ColumnDef.valueGetter (fun x -> x)
+                            ColumnDef.cellRenderer (fun cellParams ->
+                                match cellParams.data with
+                                | Some app ->
+                                    Html.div [
+                                        prop.className "flex gap-2"
+                                        prop.children [
+                                            Html.button [
+                                                prop.className "btn btn-sm btn-outline"
+                                                prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent app)))
+                                                prop.children [
+                                                    Html.i [
+                                                        prop.className "fas fa-eye"
+                                                        prop.title "Open and focus"
+                                                    ]
+                                                ]
+                                            ]
+                                            Html.button [
+                                                prop.className "btn btn-sm btn-primary"
+                                                prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent app)))
+                                                prop.children [
+                                                    Html.i [
+                                                        prop.className "fas fa-plus"
+                                                        prop.title "Open in background"
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                | None -> Html.none
+                            )
                         ]
-                        ColumnDef.create<string> [
-                            ColumnDef.field "Title"
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Text
+                            ColumnDef.headerName "CAG Reference"
+                            ColumnDef.width 180
+                            ColumnDef.valueGetter (fun x -> x.Reference)
+                        ]
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Text
+                            ColumnDef.headerName "App #"
+                            ColumnDef.width 100
+                            ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
+                        ]
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Text
                             ColumnDef.headerName "Title"
                             ColumnDef.width 250
-                            ColumnDef.cellRenderer (fun x y ->
-                                Html.div [
-                                    Html.div [
-                                        prop.className "font-medium"
-                                        prop.text (y.Title)
-                                    ]
-                                    Html.div [
-                                        prop.className "text-sm text-gray-500"
-                                        prop.text (y.ContactName)
-                                    ]
-                                ]
-                            )
+                            ColumnDef.valueGetter (fun x -> x.Title)
                         ]
-                        ColumnDef.create<string> [
-                            ColumnDef.field "ApplicantOrganisation"
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Text
                             ColumnDef.headerName "Organisation"
                             ColumnDef.width 200
+                            ColumnDef.valueGetter (fun x -> x.ApplicantOrganisation)
                         ]
-                        ColumnDef.create<string> [
-                            ColumnDef.field "Status"
-                            AgGrid.ColumnDef.headerName "Status"
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Text
+                            ColumnDef.headerName "Status"
                             ColumnDef.width 150
-                            ColumnDef.cellRenderer (fun x y ->
-                                Html.div [
-                                    prop.className (
-                                        match (string y.Status).ToLower() with
-                                        | s when s.Contains("approved") -> "badge badge-success"
-                                        | s when s.Contains("pending") -> "badge badge-warning"
-                                        | s when s.Contains("rejected") -> "badge badge-error"
-                                        | _ -> "badge"
-                                    )
-                                    prop.text (string y.Status)
-                                ]
+                            ColumnDef.valueGetter (fun x -> x.Status)
+                            ColumnDef.cellRenderer (fun cellParams ->
+                                match cellParams.data with
+                                | Some app ->
+                                    Html.div [
+                                        prop.className (
+                                            match (string app.Status).ToLower() with
+                                            | s when s.Contains("approved") -> "badge badge-success"
+                                            | s when s.Contains("pending") -> "badge badge-warning"
+                                            | s when s.Contains("rejected") -> "badge badge-error"
+                                            | _ -> "badge"
+                                        )
+                                        prop.text (string app.Status)
+                                    ]
+                                | None -> Html.none
                             )
                         ]
-                        ColumnDef.create<unit> [
-                            ColumnDef.headerName "Actions"
-                            ColumnDef.width 200
-                            ColumnDef.cellRenderer (fun x y ->
-                                Html.div [
-                                    prop.className "flex gap-2"
-                                    prop.children [
-                                        Html.button [
-                                            prop.className "btn btn-sm btn-outline"
-                                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent y)))
-                                            prop.children [
-                                                Html.i [
-                                                    prop.className "fas fa-eye"  // Using Font Awesome icon
-                                                    prop.title "Open and focus"
-                                                ]
-                                            ]
-                                        ]
-                                        Html.button [
-                                            prop.className "btn btn-sm btn-primary"
-                                            prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent y)))
-                                            prop.children [
-                                                Html.i [
-                                                    prop.className "fas fa-plus"  // Using Font Awesome icon
-                                                    prop.title "Open in background"
-                                                ]
-                                            ]
-                                        ]
-                                    ]
-                                ]
-                            )
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Date
+                            ColumnDef.headerName "Outcome Date"
+                            ColumnDef.width 150
+                            ColumnDef.valueGetter (fun x -> x.OutcomeDate)
+                            ColumnDef.valueFormatter (fun valueParams ->
+                                valueParams.value
+                                |> Option.map string
+                                |> Option.defaultValue "")
+                        ]
+                        ColumnDef.create [
+                            ColumnDef.filter RowFilter.Date
+                            ColumnDef.headerName "Next Review Date"
+                            ColumnDef.width 150
+                            ColumnDef.valueGetter (fun x -> x.NextReviewDate)
+                            ColumnDef.valueFormatter (fun valueParams ->
+                                valueParams.value
+                                |> Option.map string
+                                |> Option.defaultValue "")
                         ]
                     ]
                     AgGrid.pagination true
-                    AgGrid.paginationPageSize 10
+                    //AgGrid.paginationPageSize 10
+                    AgGrid.paginationAutoPageSize true
                     AgGrid.domLayout DOMLayout.AutoHeight
-                    //AgGrid.theme "alpine"
                 ]
             ]
         ]

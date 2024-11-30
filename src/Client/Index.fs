@@ -797,33 +797,37 @@ let view model dispatch =
         prop.className "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-x-hidden"
         prop.children [
             Html.div [
-                prop.className "container mx-auto px-4 py-8 pb-20 max-w-7xl"
+                prop.className "container mx-auto px-4 py-4 pb-20 max-w-7xl"
                 prop.children [
                     Html.div [
-                        prop.className "text-center mb-12"
+                        prop.className "flex items-center justify-between mb-6"
                         prop.children [
-                            Html.h1 [
-                                prop.className "text-4xl font-light tracking-wide text-gray-800"
+                            Html.div [
+                                prop.className "flex flex-col items-start"
                                 prop.children [
-                                    Html.span [
-                                        prop.className "font-normal"
-                                        prop.text "CAG "
+                                    Html.h1 [
+                                        prop.className "text-2xl font-light tracking-wide text-gray-800"
+                                        prop.children [
+                                            Html.span [
+                                                prop.className "font-normal"
+                                                prop.text "CAG "
+                                            ]
+                                            Html.span [
+                                                prop.className "font-extralight"
+                                                prop.text "Register"
+                                            ]
+                                        ]
                                     ]
-                                    Html.span [
-                                        prop.className "font-extralight"
-                                        prop.text "Register"
+                                    Html.div [
+                                        prop.className "text-gray-500 text-xs tracking-wider uppercase"
+                                        prop.text "Unofficial Viewer"
                                     ]
                                 ]
                             ]
-                            Html.div [
-                                prop.className "mt-1 text-gray-500 text-sm tracking-wider uppercase"
-                                prop.text "Unofficial Viewer"
-                            ]
+                            // File load info moved to the right side
+                            ViewComponents.fileLoadInfo model.FileLoadResult
                         ]
                     ]
-
-                    // Add file load info
-                    ViewComponents.fileLoadInfo model.FileLoadResult
 
                     // Active tab content
                     match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with

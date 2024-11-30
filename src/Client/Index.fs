@@ -799,9 +799,27 @@ let view model dispatch =
             Html.div [
                 prop.className "container mx-auto px-4 py-8 pb-20 max-w-7xl"
                 prop.children [
-                    Html.h1 [
-                        prop.className "text-center text-5xl font-bold text-gray-800 mb-8"
-                        prop.text "CAG Register"
+                    Html.div [
+                        prop.className "text-center mb-12"
+                        prop.children [
+                            Html.h1 [
+                                prop.className "text-4xl font-light tracking-wide text-gray-800"
+                                prop.children [
+                                    Html.span [
+                                        prop.className "font-normal"
+                                        prop.text "CAG "
+                                    ]
+                                    Html.span [
+                                        prop.className "font-extralight"
+                                        prop.text "Register"
+                                    ]
+                                ]
+                            ]
+                            Html.div [
+                                prop.className "mt-1 text-gray-500 text-sm tracking-wider uppercase"
+                                prop.text "Unofficial Viewer"
+                            ]
+                        ]
                     ]
 
                     // Add file load info

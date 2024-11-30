@@ -248,7 +248,6 @@ module ViewComponents =
                             ColumnDef.headerName "App #"
                             ColumnDef.width 100
                             ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
-                            columnDefProp("sort", "desc")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Text
@@ -303,6 +302,7 @@ module ViewComponents =
                                 match Option.flatten valueParams.value with
                                 | Some date -> date.Format("yyyy-MM-dd")
                                 | None -> "")
+                            columnDefProp("sort", "desc")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Date

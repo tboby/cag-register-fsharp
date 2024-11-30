@@ -281,6 +281,8 @@ module ViewComponents =
                             ColumnDef.headerName "App #"
                             ColumnDef.width 100
                             ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
+                            if registerType = NonResearch then
+                                columnDefProp("sort", "desc")
                         ]
                         ColumnDef.create [
                             ColumnDef.filter RowFilter.Text

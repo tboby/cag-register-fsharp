@@ -24,10 +24,17 @@ module CagRegisterXLSM =
         with _ ->
             DateTime.MinValue
 
-    let findLatestExcelFile directory pattern =
+    let findLatestExcelFile directory registerType =
         let files =
-            Directory.GetFiles(directory, pattern)
-            |> Array.filter (fun f -> [".xlsm"; ".xlsx"; ".xls"] |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            Directory.GetFiles(directory, "*.xls*")
+            |> Array.filter (fun f ->
+                let isExcelFile = [".xlsm"; ".xlsx"; ".xls"] |> List.exists (fun ext -> f.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                let filename = Path.GetFileName(f).ToLowerInvariant()
+                let isCorrectType =
+                    match registerType with
+                    | NonResearch -> filename.Contains("non-research")
+                    | Research -> filename.Contains("research") && not (filename.Contains("non-research"))
+                isExcelFile && isCorrectType)
             |> Array.map (fun f -> FileInfo(f))
             |> Array.toList
 
@@ -48,7 +55,7 @@ module CagRegisterXLSM =
                     Ok {
                         LoadedFile = file.Name
                         LoadedDate = lastModified
-                        RegisterType = NonResearch
+                        RegisterType = registerType
                         FailedFiles = failedFiles |> List.rev
                     }
                 with ex ->
@@ -71,12 +78,7 @@ module CagRegisterXLSM =
             |> Option.defaultValue "."
             |> fun path -> if Directory.Exists(path) then path else "."
 
-        let filePattern =
-            match registerType with
-            | Research -> "*research*.xls*"
-            | NonResearch -> "*non-research*.xls*"
-
-        match findLatestExcelFile directory filePattern with
+        match findLatestExcelFile directory registerType with
         | Ok result ->
             currentLoadResult <- Some { result with RegisterType = registerType }
             Path.Combine(directory, result.LoadedFile)

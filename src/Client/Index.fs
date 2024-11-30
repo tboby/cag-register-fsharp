@@ -363,7 +363,7 @@ module ViewComponents =
     let applicationDetail (app: CagApplication) dispatch =
         Html.div [
             prop.className [
-                "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-5xl mx-auto"
+                "bg-white/80 rounded-md shadow-md p-6 animate-fadeIn mb-16 max-w-7xl mx-auto"
                 if app.ApplicationStatus = Obsolete then "opacity-50"
             ]
             prop.children [

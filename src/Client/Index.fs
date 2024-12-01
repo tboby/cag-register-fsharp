@@ -19,11 +19,16 @@ type TabState = {
     Content: TabContent
 }
 
-type Model = {
+type RegisterData = {
     Applications: RemoteData<CagApplication list>
     FrontPageEntries: RemoteData<CagFrontPageEntry list>
     Discrepancies: RemoteData<ApplicationDiscrepancy list>
     FileLoadResult: RemoteData<FileLoadResult option>
+}
+
+type Model = {
+    Research: RegisterData
+    NonResearch: RegisterData
     OpenTabs: TabState list
     ActiveTabId: string
     CurrentRegisterType: RegisterType
@@ -44,11 +49,16 @@ type Msg =
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
 let init () =
-    let model = {
+    let emptyRegisterData = {
         Applications = NotStarted
         FrontPageEntries = NotStarted
         Discrepancies = NotStarted
         FileLoadResult = NotStarted
+    }
+
+    let model = {
+        Research = emptyRegisterData
+        NonResearch = emptyRegisterData
         OpenTabs = [
             { Id = "research"
               Title = "Research"
@@ -89,9 +99,15 @@ let update msg model =
                 Cmd.OfAsync.perform applicationsApi.getApplications registerType (Finished >> LoadApplications)
                 Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
-            { model with Applications = Loading }, cmd
+            let updateRegisterData data = { data with Applications = Loading }
+            { model with
+                Research = if registerType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished apps ->
-            { model with Applications = Loaded apps }, Cmd.none
+            let updateRegisterData data = { data with Applications = Loaded apps }
+            { model with
+                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadFrontPageEntries msg ->
         match msg with
         | Start registerType ->
@@ -99,9 +115,15 @@ let update msg model =
                 Cmd.OfAsync.perform applicationsApi.getFrontPageEntries registerType (Finished >> LoadFrontPageEntries)
                 Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
-            { model with FrontPageEntries = Loading }, cmd
+            let updateRegisterData data = { data with FrontPageEntries = Loading }
+            { model with
+                Research = if registerType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished frontPageEntries ->
-            { model with FrontPageEntries = Loaded frontPageEntries }, Cmd.none
+            let updateRegisterData data = { data with FrontPageEntries = Loaded frontPageEntries }
+            { model with
+                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadDiscrepancies msg ->
         match msg with
         | Start registerType ->
@@ -109,16 +131,28 @@ let update msg model =
                 Cmd.OfAsync.perform applicationsApi.getDiscrepancies registerType (Finished >> LoadDiscrepancies)
                 Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
-            { model with Discrepancies = Loading }, cmd
+            let updateRegisterData data = { data with Discrepancies = Loading }
+            { model with
+                Research = if registerType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished discrepancies ->
-            { model with Discrepancies = Loaded discrepancies }, Cmd.none
+            let updateRegisterData data = { data with Discrepancies = Loaded discrepancies }
+            { model with
+                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadFileResult msg ->
         match msg with
         | Start registerType ->
             let cmd = Cmd.OfAsync.perform applicationsApi.getFileLoadResult registerType (Finished >> LoadFileResult)
-            { model with FileLoadResult = Loading }, cmd
+            let updateRegisterData data = { data with FileLoadResult = Loading }
+            { model with
+                Research = if registerType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished result ->
-            { model with FileLoadResult = Loaded result }, Cmd.none
+            let updateRegisterData data = { data with FileLoadResult = Loaded result }
+            { model with
+                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
@@ -181,7 +215,8 @@ let update msg model =
             | _ -> model.CurrentRegisterType
 
         let cmd =
-            if tabId = "research" || tabId = "non-research" then
+            if (tabId = "research" && model.Research.Applications = NotStarted) ||
+               (tabId = "non-research" && model.NonResearch.Applications = NotStarted) then
                 Cmd.batch [
                     LoadApplications(Start(registerType)) |> Cmd.ofMsg
                     LoadFileResult(Start(registerType)) |> Cmd.ofMsg
@@ -196,10 +231,7 @@ let update msg model =
             LoadApplications(Start(registerType)) |> Cmd.ofMsg
             LoadFileResult(Start(registerType)) |> Cmd.ofMsg
         ]
-        { model with
-            CurrentRegisterType = registerType
-            Applications = Loading
-            FileLoadResult = Loading }, cmd
+        { model with CurrentRegisterType = registerType }, cmd
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
@@ -707,9 +739,14 @@ module ViewComponents =
         ]
 
     let tabContent (tab: TabState) model dispatch =
+        let registerData =
+            match model.CurrentRegisterType with
+            | Research -> model.Research
+            | NonResearch -> model.NonResearch
+
         match tab.Content with
         | TableContent ->
-            match model.Applications with
+            match registerData.Applications with
             | NotStarted ->
                 dispatch (LoadApplications(Start(model.CurrentRegisterType)))
                 dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
@@ -726,7 +763,7 @@ module ViewComponents =
         | ApplicationContent app ->
             applicationDetail app dispatch
         | DiscrepancyContent ->
-            match model.Discrepancies with
+            match registerData.Discrepancies with
             | NotStarted ->
                 dispatch (LoadDiscrepancies(Start(model.CurrentRegisterType)))
                 dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
@@ -878,7 +915,10 @@ let view model dispatch =
                                     ]
                                 ]
                             ]
-                            ViewComponents.fileLoadInfo model.FileLoadResult
+                            if model.CurrentRegisterType = Research then
+                                ViewComponents.fileLoadInfo model.Research.FileLoadResult
+                            else
+                                ViewComponents.fileLoadInfo model.NonResearch.FileLoadResult
                         ]
                     ]
 

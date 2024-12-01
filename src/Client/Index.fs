@@ -9,7 +9,7 @@ open Fable.DateFunctions
 open System
 
 type TabContent =
-    | TableContent
+    | TableContent of RegisterType
     | ApplicationContent of CagApplication
     | DiscrepancyContent
 
@@ -62,10 +62,10 @@ let init () =
         OpenTabs = [
             { Id = "research"
               Title = "Research"
-              Content = TableContent }
+              Content = TableContent Research }
             { Id = "non-research"
               Title = "Non-Research"
-              Content = TableContent }
+              Content = TableContent NonResearch }
         ]
         ActiveTabId = "research"
         CurrentRegisterType = Research
@@ -77,7 +77,7 @@ let init () =
     model, cmd
 let createShortTitle =
     function
-    | TableContent -> "Applications"
+    | TableContent registerType -> sprintf "Applications (%s)" (string registerType)
     | DiscrepancyContent -> "Discrepancies"
     | ApplicationContent app ->
         let maxTitleLength = 20
@@ -156,7 +156,7 @@ let update msg model =
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
-            | TableContent -> "home", "Applications"
+            | TableContent registerType -> "home", sprintf "Applications (%s)" (string registerType)
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -179,7 +179,7 @@ let update msg model =
     | OpenTab content ->
         let (id, title) =
             match content with
-            | TableContent -> "home", "Applications"
+            | TableContent registerType -> "home", sprintf "Applications (%s)" (string registerType)
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -259,159 +259,171 @@ module ViewComponents =
             ]
         ]
 
-    let applicationTable (apps: CagApplication list) (registerType: RegisterType) dispatch =
-        Html.div [
-            prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
-            prop.children [
-                Html.div [
-                    prop.className "flex justify-end mb-4"
-                    prop.children [
-                        Html.button [
-                            prop.className "btn btn-primary"
-                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
-                            prop.text "View Discrepancies"
-                        ]
-                    ]
-                ]
-                AgGrid.grid [
-                    AgGrid.rowData (apps |> Array.ofList)
-                    AgGrid.defaultColDef [
-                        ColumnDef.resizable true
-                        ColumnDef.sortable true
-                        ColumnDef.filter RowFilter.Text
-                    ]
-                    agGridProp("rowClassRules", {| ``opacity-50`` = (fun (rowParams : ICellRendererParams<_, _>) ->
-                        match rowParams.data with
-                        | Some app when app.ApplicationStatus = Obsolete -> true
-                        | _ -> false
-                    ) |})
-                    AgGrid.columnDefs [
-                        ColumnDef.create [
-                            ColumnDef.headerName ""
-                            ColumnDef.width 60
-                            ColumnDef.valueGetter (fun x -> x)
-                            ColumnDef.cellRenderer (fun cellParams ->
-                                match cellParams.data with
-                                | Some app ->
-                                    Html.div [
-                                        prop.className "flex gap-2"
-                                        prop.children [
-                                            Html.button [
-                                                prop.className "btn btn-sm btn-outline"
-                                                prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent app)))
-                                                prop.children [
-                                                    Html.i [
-                                                        prop.className "fas fa-eye"
-                                                        prop.title "Open and focus"
-                                                    ]
-                                                ]
-                                            ]
-                                            Html.button [
-                                                prop.className "btn btn-sm btn-primary"
-                                                prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent app)))
-                                                prop.children [
-                                                    Html.i [
-                                                        prop.className "fas fa-plus"
-                                                        prop.title "Open in background"
-                                                    ]
-                                                ]
-                                            ]
+    [<ReactComponent>]
+    let applicationTable (visible: bool) (apps: CagApplication list) (registerType: RegisterType) dispatch =
+        // Memoize column definitions
+        let columnDefs = React.useMemo((fun () -> [
+            ColumnDef.create [
+                ColumnDef.headerName ""
+                ColumnDef.width 60
+                ColumnDef.valueGetter (fun x -> x)
+                ColumnDef.cellRenderer (fun cellParams ->
+                    match cellParams.data with
+                    | Some app ->
+                        Html.div [
+                            prop.className "flex gap-2"
+                            prop.children [
+                                Html.button [
+                                    prop.className "btn btn-sm btn-outline"
+                                    prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent app)))
+                                    prop.children [
+                                        Html.i [
+                                            prop.className "fas fa-eye"
+                                            prop.title "Open and focus"
                                         ]
                                     ]
-                                | None -> Html.none
-                            )
-                        ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Text
-                            ColumnDef.headerName "CAG Reference"
-                            ColumnDef.width 180
-                            ColumnDef.valueGetter (fun x -> x.Reference)
-                        ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Text
-                            ColumnDef.headerName "App #"
-                            ColumnDef.width 100
-                            ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
-                            if registerType = NonResearch then
-                                columnDefProp("sort", "desc")
-                        ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Text
-                            ColumnDef.headerName "Title"
-                            ColumnDef.width 250
-                            ColumnDef.valueGetter (fun x -> x.Title)
-                            columnDefProp("tooltipField", "Title")
-                        ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Text
-                            ColumnDef.headerName "Organisation"
-                            ColumnDef.width 200
-                            ColumnDef.valueGetter (fun x -> x.ApplicantOrganisation)
-                            columnDefProp("tooltipField", "ApplicantOrganisation")
-                        ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Text
-                            ColumnDef.headerName "Status"
-                            ColumnDef.width 150
-                            ColumnDef.valueGetter (fun (x : CagApplication) -> x.Status)
-                            ColumnDef.cellRenderer (fun cellParams ->
-                                match cellParams.data with
-                                | Some app ->
-                                    Html.div [
-                                        prop.className [
-                                            match (string app.Status).ToLower() with
-                                            | s when s.Contains("approved") -> "badge badge-success"
-                                            | s when s.Contains("pending") -> "badge badge-warning"
-                                            | s when s.Contains("rejected") -> "badge badge-error"
-                                            | _ -> "badge"
-                                        ]
-                                        prop.children [
-                                            Html.span [
-                                                prop.text (string app.Status)
-                                            ]
-                                            if app.ApplicationStatus = Obsolete then
-                                                Html.span [
-                                                    prop.className "ml-2 text-xs"
-                                                    prop.text "(Hidden)"
-                                                ]
+                                ]
+                                Html.button [
+                                    prop.className "btn btn-sm btn-primary"
+                                    prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent app)))
+                                    prop.children [
+                                        Html.i [
+                                            prop.className "fas fa-plus"
+                                            prop.title "Open in background"
                                         ]
                                     ]
-                                | None -> Html.none
-                            )
-                        ]
-                        if registerType = Research then
-                            ColumnDef.create [
-                                ColumnDef.filter RowFilter.Date
-                                ColumnDef.headerName "Outcome Date"
-                                ColumnDef.width 150
-                                ColumnDef.valueGetter (fun (x : CagApplication) -> x.OutcomeDate)
-                                ColumnDef.valueFormatter (fun valueParams ->
-                                    match Option.flatten valueParams.value with
-                                    | Some date -> date.Format("yyyy-MM-dd")
-                                    | None -> "")
-                                columnDefProp("sort", "desc")
+                                ]
                             ]
-                        ColumnDef.create [
-                            ColumnDef.filter RowFilter.Date
-                            ColumnDef.headerName "Next Review Date"
-                            ColumnDef.width 150
-                            ColumnDef.valueFormatter (fun valueParams ->
-                                match Option.flatten valueParams.value with
-                                | Some (date : DateTime) -> date.Format("yyyy-MM-dd")
-                                | None -> "")
-                            ColumnDef.valueGetter (fun (x : CagApplication) -> x.NextReviewDate)
                         ]
+                    | None -> Html.none
+                )
+            ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Text
+                ColumnDef.headerName "CAG Reference"
+                ColumnDef.width 180
+                ColumnDef.valueGetter (fun x -> x.Reference)
+            ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Text
+                ColumnDef.headerName "App #"
+                ColumnDef.width 100
+                ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
+                if registerType = NonResearch then
+                    columnDefProp("sort", "desc")
+            ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Text
+                ColumnDef.headerName "Title"
+                ColumnDef.width 250
+                ColumnDef.valueGetter (fun x -> x.Title)
+                columnDefProp("tooltipField", "Title")
+            ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Text
+                ColumnDef.headerName "Organisation"
+                ColumnDef.width 200
+                ColumnDef.valueGetter (fun x -> x.ApplicantOrganisation)
+                columnDefProp("tooltipField", "ApplicantOrganisation")
+            ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Text
+                ColumnDef.headerName "Status"
+                ColumnDef.width 150
+                ColumnDef.valueGetter (fun (x : CagApplication) -> x.Status)
+                ColumnDef.cellRenderer (fun cellParams ->
+                    match cellParams.data with
+                    | Some app ->
+                        Html.div [
+                            prop.className [
+                                match (string app.Status).ToLower() with
+                                | s when s.Contains("approved") -> "badge badge-success"
+                                | s when s.Contains("pending") -> "badge badge-warning"
+                                | s when s.Contains("rejected") -> "badge badge-error"
+                                | _ -> "badge"
+                            ]
+                            prop.children [
+                                Html.span [
+                                    prop.text (string app.Status)
+                                ]
+                                if app.ApplicationStatus = Obsolete then
+                                    Html.span [
+                                        prop.className "ml-2 text-xs"
+                                        prop.text "(Hidden)"
+                                    ]
+                            ]
+                        ]
+                    | None -> Html.none
+                )
+            ]
+            if registerType = Research then
+                ColumnDef.create [
+                    ColumnDef.filter RowFilter.Date
+                    ColumnDef.headerName "Outcome Date"
+                    ColumnDef.width 150
+                    ColumnDef.valueGetter (fun (x : CagApplication) -> x.OutcomeDate)
+                    ColumnDef.valueFormatter (fun valueParams ->
+                        match Option.flatten valueParams.value with
+                        | Some date -> date.Format("yyyy-MM-dd")
+                        | None -> "")
+                    columnDefProp("sort", "desc")
+                ]
+            ColumnDef.create [
+                ColumnDef.filter RowFilter.Date
+                ColumnDef.headerName "Next Review Date"
+                ColumnDef.width 150
+                ColumnDef.valueFormatter (fun valueParams ->
+                    match Option.flatten valueParams.value with
+                    | Some (date : DateTime) -> date.Format("yyyy-MM-dd")
+                    | None -> "")
+                ColumnDef.valueGetter (fun (x : CagApplication) -> x.NextReviewDate)
+            ]
 
+        ]), [| |]) // Empty dependencies array since these don't depend on props
+
+        // Memoize row class rules
+        let rowClassRules = React.useMemo((fun () ->
+            {| ``opacity-50`` = (fun (rowParams : ICellRendererParams<_, _>) ->
+                match rowParams.data with
+                | Some app when app.ApplicationStatus = Obsolete -> true
+                | _ -> false
+            ) |}), [| |])
+
+        if not visible then
+            Html.none
+        else
+            Html.div [
+                prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
+                prop.children [
+                    Html.div [
+                        prop.className "flex justify-end mb-4"
+                        prop.children [
+                            Html.button [
+                                prop.className "btn btn-primary"
+                                prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
+                                prop.text "View Discrepancies"
+                            ]
+                        ]
                     ]
-                    AgGrid.pagination true
-                    AgGrid.paginationPageSize 10
-                    //AgGrid.paginationAutoPageSize true
-                    AgGrid.domLayout DOMLayout.AutoHeight
-                    agGridProp("tooltipShowDelay", 200)
+                    AgGrid.grid [
+                        agGridProp("key", sprintf "applications-%s" (string registerType))
+                        agGridProp("gridId", sprintf "applications-%s" (string registerType))
+                        agGridProp("id", sprintf "applications-%s" (string registerType))
+                        AgGrid.rowData (apps |> Array.ofList)
+                        AgGrid.defaultColDef [
+                            ColumnDef.resizable true
+                            ColumnDef.sortable true
+                            ColumnDef.filter RowFilter.Text
+                        ]
+                        agGridProp("rowClassRules", rowClassRules)
+                        AgGrid.columnDefs columnDefs
+                        AgGrid.pagination true
+                        AgGrid.paginationPageSize 10
+                        AgGrid.domLayout DOMLayout.AutoHeight
+                        agGridProp("tooltipShowDelay", 200)
+                    ]
                 ]
             ]
-        ]
-
 
     let replaceNewlinesWithBr (text: string) =
         let mergeWhitespace (text: string) =
@@ -738,38 +750,47 @@ module ViewComponents =
             ]
         ]
 
-    let tabContent (tab: TabState) model dispatch =
-        let registerData =
-            match model.CurrentRegisterType with
-            | Research -> model.Research
-            | NonResearch -> model.NonResearch
-
+    let tabContent (visible: bool) (tab: TabState) model dispatch =
         match tab.Content with
-        | TableContent ->
+        | TableContent registerType ->
+            let registerData =
+                match registerType with
+                | Research -> model.Research
+                | NonResearch -> model.NonResearch
             match registerData.Applications with
-            | NotStarted ->
+            | NotStarted when visible ->
                 dispatch (LoadApplications(Start(model.CurrentRegisterType)))
                 dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
                 Html.div [
                     prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
                     prop.text "Loading..."
                 ]
-            | Loading ->
+            | Loading when visible ->
                 Html.div [
                     prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
                     prop.text "Loading applications..."
                 ]
-            | Loaded apps -> applicationTable apps model.CurrentRegisterType dispatch
+            | Loaded apps ->
+                applicationTable visible apps registerType dispatch
+            | _ -> Html.none
         | ApplicationContent app ->
-            applicationDetail app dispatch
+            if visible then
+                applicationDetail app dispatch
+            else
+                Html.none
         | DiscrepancyContent ->
+            let registerData =
+                match model.CurrentRegisterType with
+                | Research -> model.Research
+                | NonResearch -> model.NonResearch
             match registerData.Discrepancies with
-            | NotStarted ->
+            | NotStarted when visible ->
                 dispatch (LoadDiscrepancies(Start(model.CurrentRegisterType)))
                 dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
                 Html.div "Loading discrepancies..."
-            | Loading -> Html.div "Loading discrepancies..."
-            | Loaded discrepancies -> discrepancyTable discrepancies dispatch
+            | Loading when visible -> Html.div "Loading discrepancies..."
+            | Loaded discrepancies when visible -> discrepancyTable discrepancies dispatch
+            | _ -> Html.none
     let renderTab (tab: TabState) activeTabId dispatch =
         Html.div [
             prop.className [
@@ -883,6 +904,40 @@ module ViewComponents =
             ]
         ]
 
+[<ReactComponent>]
+let TableTab (registerType: RegisterType) (registerData: RegisterData) dispatch =
+    match registerData.Applications with
+    | NotStarted ->
+        dispatch (LoadApplications(Start(registerType)))
+        dispatch (LoadFileResult(Start(registerType)))
+        Html.div [
+            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+            prop.text "Loading..."
+        ]
+    | Loading ->
+        Html.div [
+            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+            prop.text "Loading applications..."
+        ]
+    | Loaded apps ->
+        ViewComponents.applicationTable true apps registerType dispatch
+
+[<ReactComponent>]
+let ApplicationTab (app: CagApplication) dispatch =
+    ViewComponents.applicationDetail app dispatch
+
+[<ReactComponent>]
+let DiscrepancyTab (registerType: RegisterType) (registerData: RegisterData) dispatch =
+    match registerData.Discrepancies with
+    | NotStarted ->
+        dispatch (LoadDiscrepancies(Start(registerType)))
+        dispatch (LoadFileResult(Start(registerType)))
+        Html.div "Loading discrepancies..."
+    | Loading ->
+        Html.div "Loading discrepancies..."
+    | Loaded discrepancies ->
+        ViewComponents.discrepancyTable discrepancies dispatch
+
 let view model dispatch =
     Html.section [
         prop.className "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-x-hidden"
@@ -922,10 +977,23 @@ let view model dispatch =
                         ]
                     ]
 
-                    // Active tab content
-                    match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
-                    | Some tab -> ViewComponents.tabContent tab model dispatch
-                    | None -> Html.none
+                    //Render the active tab
+                    let activeTab = model.OpenTabs |> List.find (fun t -> t.Id = model.ActiveTabId)
+                    match activeTab.Content with
+                    | TableContent registerType ->
+                        let registerData =
+                            match registerType with
+                            | Research -> model.Research
+                            | NonResearch -> model.NonResearch
+                        TableTab registerType registerData dispatch
+                    | ApplicationContent app ->
+                        ApplicationTab app dispatch
+                    | DiscrepancyContent ->
+                        let registerData =
+                            match model.CurrentRegisterType with
+                            | Research -> model.Research
+                            | NonResearch -> model.NonResearch
+                        DiscrepancyTab model.CurrentRegisterType registerData dispatch
                 ]
             ]
 

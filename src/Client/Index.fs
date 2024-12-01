@@ -16,7 +16,7 @@ let getRegisterTypeFromTabId = function
 
 type TabContent =
     | TableContent
-    | ApplicationContent of CagApplication
+    | ApplicationContent of CagApplicationId
     | DiscrepancyContent
 
 type TabState = {
@@ -100,13 +100,13 @@ let createShortTitle =
     | ApplicationContent app ->
         let maxTitleLength = 20
 
-        let shortTitle =
-            if app.Title.Length > maxTitleLength then
-                app.Title.Substring(0, maxTitleLength) + "..."
-            else
-                app.Title
+        //    let shortTitle =
+        //      if app.Title.Length > maxTitleLength then
+        //          app.Title.Substring(0, maxTitleLength) + "..."
+        //      else
+         //       app.Title
 
-        sprintf "%s: %s" app.ApplicationNumber.ApplicationNumber shortTitle
+        sprintf "%s: %s" app.ApplicationNumber app.ApplicationNumber
 
 let update msg model =
     match msg with
@@ -180,7 +180,7 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber.ApplicationNumber, createShortTitle content
+            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -211,7 +211,7 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber.ApplicationNumber, createShortTitle content
+            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -285,7 +285,7 @@ module ViewComponents =
             ColumnDef.create [
                 ColumnDef.headerName ""
                 ColumnDef.width 60
-                ColumnDef.valueGetter (fun x -> x)
+                ColumnDef.valueGetter (fun (x : CagApplication) -> x)
                 ColumnDef.cellRenderer (fun cellParams ->
                     match cellParams.data with
                     | Some app ->
@@ -294,7 +294,7 @@ module ViewComponents =
                             prop.children [
                                 Html.button [
                                     prop.className "btn btn-sm btn-outline"
-                                    prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent app)))
+                                    prop.onClick (fun _ -> dispatch (OpenAndFocusTab (ApplicationContent app.ApplicationNumber)))
                                     prop.children [
                                         Html.i [
                                             prop.className "fas fa-eye"
@@ -304,7 +304,7 @@ module ViewComponents =
                                 ]
                                 Html.button [
                                     prop.className "btn btn-sm btn-primary"
-                                    prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent app)))
+                                    prop.onClick (fun _ -> dispatch (OpenTab(ApplicationContent app.ApplicationNumber)))
                                     prop.children [
                                         Html.i [
                                             prop.className "fas fa-plus"
@@ -321,7 +321,7 @@ module ViewComponents =
                 ColumnDef.filter RowFilter.Text
                 ColumnDef.headerName "CAG Reference"
                 ColumnDef.width 180
-                ColumnDef.valueGetter (fun x -> x.Reference)
+                ColumnDef.valueGetter (fun (x : CagApplication) -> x.Reference)
             ]
             ColumnDef.create [
                 ColumnDef.filter RowFilter.Text
@@ -977,7 +977,17 @@ let view model dispatch =
                     let activeTab = model.OpenTabs |> List.find (fun t -> t.Id = model.ActiveTabId)
                     match activeTab.Content with
                     | TableContent -> Html.none // Tables are already rendered above
-                    | ApplicationContent app -> ApplicationTab app dispatch
+                    | ApplicationContent app ->
+                        match app.RegisterType, model.Research.Applications, model.NonResearch.Applications with
+                        | Research, Loaded researchApps, _ ->
+                            match researchApps |> List.tryFind (fun a -> a.ApplicationNumber.ApplicationNumber = app.ApplicationNumber) with
+                            | Some app -> ApplicationTab app dispatch
+                            | None -> Html.none
+                        | NonResearch, _, Loaded nonResearchApps ->
+                            match nonResearchApps |> List.tryFind (fun a -> a.ApplicationNumber.ApplicationNumber = app.ApplicationNumber) with
+                            | Some app -> ApplicationTab app dispatch
+                            | None -> Html.none
+                        | _ -> Html.none
                     | DiscrepancyContent -> DiscrepancyTab model dispatch
                 ]
             ]

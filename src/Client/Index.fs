@@ -8,6 +8,11 @@ open Feliz.AgGrid
 open Fable.DateFunctions
 open System
 
+let getRegisterTypeFromTabId = function
+    | "research" -> Some Research
+    | "non-research" -> Some NonResearch
+    | _ -> None
+
 type TabContent =
     | TableContent
     | ApplicationContent of CagApplication
@@ -31,7 +36,6 @@ type Model = {
     NonResearch: RegisterData
     OpenTabs: TabState list
     ActiveTabId: string
-    CurrentRegisterType: RegisterType
 }
 
 type Msg =
@@ -43,7 +47,6 @@ type Msg =
     | OpenAndFocusTab of TabContent
     | CloseTab of string
     | SetActiveTab of string
-    | SwitchRegisterType of RegisterType
 
 
 let applicationsApi =
@@ -68,7 +71,6 @@ let init () =
               Content = TableContent }
         ]
         ActiveTabId = "research"
-        CurrentRegisterType = Research
     }
     let cmd = Cmd.batch [
         LoadApplications(Start(Research)) |> Cmd.ofMsg
@@ -140,8 +142,8 @@ let update msg model =
         | Finished discrepancies ->
             let updateRegisterData data = { data with RegisterData.Discrepancies = Loaded discrepancies.Discrepancies }
             { model with
-                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
-                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
+                Research = if discrepancies.RegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if discrepancies.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadFileResult msg ->
         match msg with
         | Start registerType ->
@@ -153,15 +155,16 @@ let update msg model =
         | Finished result ->
             let updateRegisterData data = { data with FileLoadResult = Loaded result }
             { model with
-                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
-                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
+                Research = if result.Value.RegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if result.Value.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
             | TableContent ->
-                match model.CurrentRegisterType with
-                | Research -> "research", "Research Applications"
-                | NonResearch -> "non-research", "Non-Research Applications"
+                match getRegisterTypeFromTabId model.ActiveTabId with
+                | Some Research -> "research", "Research Applications"
+                | Some NonResearch -> "non-research", "Non-Research Applications"
+                | None -> "research", "Research Applications"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -178,16 +181,21 @@ let update msg model =
             { model with OpenTabs = model.OpenTabs @ [newTab]; ActiveTabId = id },
             match content with
             | DiscrepancyContent ->
-                Cmd.ofMsg (LoadDiscrepancies(Start(model.CurrentRegisterType)))
+                let registerType =
+                    match getRegisterTypeFromTabId model.ActiveTabId with
+                    | Some rt -> rt
+                    | None -> Research
+                Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
             | _ -> Cmd.none
 
     | OpenTab content ->
         let (id, title) =
             match content with
             | TableContent ->
-                match model.CurrentRegisterType with
-                | Research -> "research", "Research Applications"
-                | NonResearch -> "non-research", "Non-Research Applications"
+                match getRegisterTypeFromTabId model.ActiveTabId with
+                | Some Research -> "research", "Research Applications"
+                | Some NonResearch -> "non-research", "Non-Research Applications"
+                | None -> "research", "Research Applications"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -204,7 +212,11 @@ let update msg model =
             { model with OpenTabs = model.OpenTabs @ [newTab] },
             match content with
             | DiscrepancyContent ->
-                Cmd.ofMsg (LoadDiscrepancies(Start(model.CurrentRegisterType)))
+                let registerType =
+                    match getRegisterTypeFromTabId model.ActiveTabId with
+                    | Some rt -> rt
+                    | None -> Research
+                Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
             | _ -> Cmd.none
     | CloseTab id ->
         if id = "research" || id = "non-research" then
@@ -215,23 +227,11 @@ let update msg model =
                 OpenTabs = newTabs
                 ActiveTabId =
                     if model.ActiveTabId = id then
-                        match model.CurrentRegisterType with
-                        | Research -> "research"
-                        | NonResearch -> "non-research"
+                        "research"
                     else model.ActiveTabId
             }, Cmd.none
     | SetActiveTab tabId ->
-        let registerType =
-            match tabId with
-            | "research" -> Research
-            | "non-research" -> NonResearch
-            | _ -> model.CurrentRegisterType
-
-        { model with
-            ActiveTabId = tabId
-            CurrentRegisterType = registerType }, Cmd.none
-    | SwitchRegisterType registerType ->
-        { model with CurrentRegisterType = registerType }, Cmd.none
+        { model with ActiveTabId = tabId }, Cmd.none
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [
@@ -245,13 +245,7 @@ module ViewComponents =
                                 then "font-bold"
                                 else ""
                             )
-                            prop.onClick (fun _ ->
-                                dispatch (SetActiveTab (
-                                    match model.CurrentRegisterType with
-                                    | Research -> "research"
-                                    | NonResearch -> "non-research"
-                                ))
-                            )
+                            prop.onClick (fun _ -> dispatch (SetActiveTab "research"))
                             prop.text "Applications"
                         ]
                     ]
@@ -760,47 +754,7 @@ module ViewComponents =
             ]
         ]
 
-    let tabContent (visible: bool) (tab: TabState) model dispatch =
-        match tab.Content with
-        | TableContent ->
-            let registerData =
-                match model.CurrentRegisterType with
-                | Research -> model.Research
-                | NonResearch -> model.NonResearch
-            match registerData.Applications with
-            | NotStarted when visible ->
-                dispatch (LoadApplications(Start(model.CurrentRegisterType)))
-                dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
-                Html.div [
-                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
-                    prop.text "Loading..."
-                ]
-            | Loading when visible ->
-                Html.div [
-                    prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
-                    prop.text "Loading applications..."
-                ]
-            | Loaded apps ->
-                applicationTable apps model.CurrentRegisterType visible dispatch
-            | _ -> Html.none
-        | ApplicationContent app ->
-            if visible then
-                applicationDetail app dispatch
-            else
-                Html.none
-        | DiscrepancyContent ->
-            let registerData =
-                match model.CurrentRegisterType with
-                | Research -> model.Research
-                | NonResearch -> model.NonResearch
-            match registerData.Discrepancies with
-            | NotStarted when visible ->
-                dispatch (LoadDiscrepancies(Start(model.CurrentRegisterType)))
-                dispatch (LoadFileResult(Start(model.CurrentRegisterType)))
-                Html.div "Loading discrepancies..."
-            | Loading when visible -> Html.div "Loading discrepancies..."
-            | Loaded discrepancies when visible -> discrepancyTable discrepancies dispatch
-            | _ -> Html.none
+
     let renderTab (tab: TabState) activeTabId dispatch =
         Html.div [
             prop.className [
@@ -858,9 +812,9 @@ module ViewComponents =
             ]
         ]
 
-    let fileLoadInfo (fileLoadResult: RemoteData<FileLoadResult option>) =
+    let fileLoadInfo (fileLoadResult: RemoteData<FileLoadResult option>) (registerType: RegisterType) =
         match fileLoadResult with
-        | Loaded (Some result) ->
+        | Loaded (Some result) when result.RegisterType = registerType ->
             Html.div [
                 prop.className "bg-white/80 rounded-md shadow-md p-4 mb-4"
                 prop.children [
@@ -892,29 +846,6 @@ module ViewComponents =
             ]
         | _ -> Html.none
 
-    let registerTypeSelector (currentType: RegisterType) dispatch =
-        Html.div [
-            prop.className "flex gap-2 mb-4"
-            prop.children [
-                Html.button [
-                    prop.className [
-                        "btn"
-                        if currentType = Research then "btn-primary" else "btn-outline"
-                    ]
-                    prop.onClick (fun _ -> dispatch (SwitchRegisterType Research))
-                    prop.text "Research Register"
-                ]
-                Html.button [
-                    prop.className [
-                        "btn"
-                        if currentType = NonResearch then "btn-primary" else "btn-outline"
-                    ]
-                    prop.onClick (fun _ -> dispatch (SwitchRegisterType NonResearch))
-                    prop.text "Non-Research Register"
-                ]
-            ]
-        ]
-
 [<ReactComponent>]
 let TableTab (registerData: RegisterData) (registerType: RegisterType) (visible: bool) dispatch =
     match registerData.Applications with
@@ -938,7 +869,17 @@ let ApplicationTab (app: CagApplication) dispatch =
     ViewComponents.applicationDetail app dispatch
 
 [<ReactComponent>]
-let DiscrepancyTab (registerType: RegisterType) (registerData: RegisterData) dispatch =
+let DiscrepancyTab (model: Model) dispatch =
+    let registerType =
+        match getRegisterTypeFromTabId model.ActiveTabId with
+        | Some rt -> rt
+        | None -> Research // Default to research if no tab selected
+
+    let registerData =
+        match registerType with
+        | Research -> model.Research
+        | NonResearch -> model.NonResearch
+
     match registerData.Discrepancies with
     | NotStarted ->
         dispatch (LoadDiscrepancies(Start(registerType)))
@@ -981,15 +922,15 @@ let view model dispatch =
                                     ]
                                 ]
                             ]
-                            if model.CurrentRegisterType = Research then
-                                ViewComponents.fileLoadInfo model.Research.FileLoadResult
-                            else
-                                ViewComponents.fileLoadInfo model.NonResearch.FileLoadResult
+                            match getRegisterTypeFromTabId model.ActiveTabId with
+                            | Some Research -> ViewComponents.fileLoadInfo model.Research.FileLoadResult Research
+                            | Some NonResearch -> ViewComponents.fileLoadInfo model.NonResearch.FileLoadResult NonResearch
+                            | None -> Html.none
                         ]
                     ]
 
                     // Always render both tables
-                    match model.Research.Applications, model.CurrentRegisterType = Research with
+                    match model.Research.Applications, getRegisterTypeFromTabId model.ActiveTabId = Some Research with
                     | NotStarted, true ->
                         Html.div [
                             prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
@@ -1003,7 +944,7 @@ let view model dispatch =
                     | Loaded researchApps, visible ->
                         TableTab model.Research Research visible dispatch
                     | _ -> Html.none
-                    match model.NonResearch.Applications, model.CurrentRegisterType = NonResearch with
+                    match model.NonResearch.Applications, getRegisterTypeFromTabId model.ActiveTabId = Some NonResearch with
                     | NotStarted, true ->
                         Html.div [
                             prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
@@ -1023,12 +964,7 @@ let view model dispatch =
                     match activeTab.Content with
                     | TableContent -> Html.none // Tables are already rendered above
                     | ApplicationContent app -> ApplicationTab app dispatch
-                    | DiscrepancyContent ->
-                        let registerData =
-                            match model.CurrentRegisterType with
-                            | Research -> model.Research
-                            | NonResearch -> model.NonResearch
-                        DiscrepancyTab model.CurrentRegisterType registerData dispatch
+                    | DiscrepancyContent -> DiscrepancyTab model dispatch
                 ]
             ]
 

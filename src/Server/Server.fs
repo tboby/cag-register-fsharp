@@ -444,7 +444,7 @@ let applicationsApi ctx = {
         return { RegisterType = registerType; Discrepancies = discrepancies }
     }
     getFileLoadResult = fun registerType -> async {
-        return CagRegisterXLSM.getCurrentLoadResult registerType
+        return { RegisterType = registerType; FileLoadResult = CagRegisterXLSM.getCurrentLoadResult registerType }
     }
 }
 

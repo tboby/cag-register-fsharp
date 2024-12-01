@@ -138,9 +138,14 @@ type DiscrepanciesResponse = {
     Discrepancies: ApplicationDiscrepancy list
 }
 
+type FileLoadResultResponse = {
+    RegisterType: RegisterType
+    FileLoadResult: FileLoadResult option
+}
+
 type ICagApplicationsApi = {
     getApplications: RegisterType -> Async<ApplicationsResponse>
     getFrontPageEntries: RegisterType -> Async<FrontPageEntriesResponse>
     getDiscrepancies: RegisterType -> Async<DiscrepanciesResponse>
-    getFileLoadResult: RegisterType -> Async<FileLoadResult option>
+    getFileLoadResult: RegisterType -> Async<FileLoadResultResponse>
 }

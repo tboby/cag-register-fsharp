@@ -123,9 +123,24 @@ type FileLoadResult = {
     FailedFiles: string list
 }
 
+type ApplicationsResponse = {
+    RegisterType: RegisterType
+    Applications: CagApplication list
+}
+
+type FrontPageEntriesResponse = {
+    RegisterType: RegisterType
+    Entries: CagFrontPageEntry list
+}
+
+type DiscrepanciesResponse = {
+    RegisterType: RegisterType
+    Discrepancies: ApplicationDiscrepancy list
+}
+
 type ICagApplicationsApi = {
-    getApplications: RegisterType -> Async<CagApplication list>
-    getFrontPageEntries: RegisterType -> Async<CagFrontPageEntry list>
-    getDiscrepancies: RegisterType -> Async<ApplicationDiscrepancy list>
+    getApplications: RegisterType -> Async<ApplicationsResponse>
+    getFrontPageEntries: RegisterType -> Async<FrontPageEntriesResponse>
+    getDiscrepancies: RegisterType -> Async<DiscrepanciesResponse>
     getFileLoadResult: RegisterType -> Async<FileLoadResult option>
 }

@@ -432,13 +432,16 @@ let todosApi ctx = {
 
 let applicationsApi ctx = {
     getApplications = fun registerType -> async {
-        return CagRegisterXLSM.getApplicationDetails registerType
+        let apps = CagRegisterXLSM.getApplicationDetails registerType
+        return { RegisterType = registerType; Applications = apps }
     }
     getFrontPageEntries = fun registerType -> async {
-        return CagRegisterXLSM.getFrontPageEntries registerType
+        let entries = CagRegisterXLSM.getFrontPageEntries registerType
+        return { RegisterType = registerType; Entries = entries }
     }
     getDiscrepancies = fun registerType -> async {
-        return CagRegisterXLSM.getDiscrepancies registerType
+        let discrepancies = CagRegisterXLSM.getDiscrepancies registerType
+        return { RegisterType = registerType; Discrepancies = discrepancies }
     }
     getFileLoadResult = fun registerType -> async {
         return CagRegisterXLSM.getCurrentLoadResult registerType

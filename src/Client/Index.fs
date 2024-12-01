@@ -35,9 +35,9 @@ type Model = {
 }
 
 type Msg =
-    | LoadApplications of ApiCall<RegisterType, CagApplication list>
-    | LoadFrontPageEntries of ApiCall<RegisterType, CagFrontPageEntry list>
-    | LoadDiscrepancies of ApiCall<RegisterType, ApplicationDiscrepancy list>
+    | LoadApplications of ApiCall<RegisterType, ApplicationsResponse>
+    | LoadFrontPageEntries of ApiCall<RegisterType, FrontPageEntriesResponse>
+    | LoadDiscrepancies of ApiCall<RegisterType, DiscrepanciesResponse>
     | LoadFileResult of ApiCall<RegisterType, FileLoadResult option>
     | OpenTab of TabContent
     | OpenAndFocusTab of TabContent
@@ -72,7 +72,9 @@ let init () =
     }
     let cmd = Cmd.batch [
         LoadApplications(Start(Research)) |> Cmd.ofMsg
+        LoadApplications(Start(NonResearch)) |> Cmd.ofMsg
         LoadFileResult(Start(Research)) |> Cmd.ofMsg
+        LoadFileResult(Start(NonResearch)) |> Cmd.ofMsg
     ]
     model, cmd
 let createShortTitle =
@@ -99,15 +101,15 @@ let update msg model =
                 Cmd.OfAsync.perform applicationsApi.getApplications registerType (Finished >> LoadApplications)
                 Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
-            let updateRegisterData data = { data with Applications = Loading }
+            let updateRegisterData data = { data with RegisterData.Applications = Loading }
             { model with
                 Research = if registerType = Research then updateRegisterData model.Research else model.Research
                 NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
-        | Finished apps ->
-            let updateRegisterData data = { data with Applications = Loaded apps }
+        | Finished response ->
+            let updateRegisterData data = { data with RegisterData.Applications = Loaded response.Applications }
             { model with
-                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
-                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
+                Research = if response.RegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if response.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadFrontPageEntries msg ->
         match msg with
         | Start registerType ->
@@ -119,11 +121,11 @@ let update msg model =
             { model with
                 Research = if registerType = Research then updateRegisterData model.Research else model.Research
                 NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
-        | Finished frontPageEntries ->
-            let updateRegisterData data = { data with FrontPageEntries = Loaded frontPageEntries }
+        | Finished response ->
+            let updateRegisterData data = { data with FrontPageEntries = Loaded response.Entries }
             { model with
-                Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
-                NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
+                Research = if response.RegisterType = Research then updateRegisterData model.Research else model.Research
+                NonResearch = if response.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
     | LoadDiscrepancies msg ->
         match msg with
         | Start registerType ->
@@ -131,12 +133,12 @@ let update msg model =
                 Cmd.OfAsync.perform applicationsApi.getDiscrepancies registerType (Finished >> LoadDiscrepancies)
                 Cmd.ofMsg (LoadFileResult(Start(registerType)))
             ]
-            let updateRegisterData data = { data with Discrepancies = Loading }
+            let updateRegisterData data = { data with RegisterData.Discrepancies = Loading }
             { model with
                 Research = if registerType = Research then updateRegisterData model.Research else model.Research
                 NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished discrepancies ->
-            let updateRegisterData data = { data with Discrepancies = Loaded discrepancies }
+            let updateRegisterData data = { data with RegisterData.Discrepancies = Loaded discrepancies.Discrepancies }
             { model with
                 Research = if model.CurrentRegisterType = Research then updateRegisterData model.Research else model.Research
                 NonResearch = if model.CurrentRegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
@@ -225,24 +227,11 @@ let update msg model =
             | "non-research" -> NonResearch
             | _ -> model.CurrentRegisterType
 
-        let cmd =
-            if (tabId = "research" && model.Research.Applications = NotStarted) ||
-               (tabId = "non-research" && model.NonResearch.Applications = NotStarted) then
-                Cmd.batch [
-                    LoadApplications(Start(registerType)) |> Cmd.ofMsg
-                    LoadFileResult(Start(registerType)) |> Cmd.ofMsg
-                ]
-            else Cmd.none
-
         { model with
             ActiveTabId = tabId
-            CurrentRegisterType = registerType }, cmd
+            CurrentRegisterType = registerType }, Cmd.none
     | SwitchRegisterType registerType ->
-        let cmd = Cmd.batch [
-            LoadApplications(Start(registerType)) |> Cmd.ofMsg
-            LoadFileResult(Start(registerType)) |> Cmd.ofMsg
-        ]
-        { model with CurrentRegisterType = registerType }, cmd
+        { model with CurrentRegisterType = registerType }, Cmd.none
 module ViewComponents =
     let navigationBreadcrumb (model: Model) dispatch =
         Html.div [

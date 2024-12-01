@@ -48,6 +48,7 @@ type Msg =
     | OpenAndFocusTab of TabContent
     | CloseTab of string
     | SetActiveTab of string
+    | UpdatePathParams
 
 let findQuery (segments: string list) : (string * string) list =
     segments
@@ -61,10 +62,30 @@ let findQuery (segments: string list) : (string * string) list =
 
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
+let createShortTitle =
+    function
+    | TableContent -> "Applications (Research)"
+    | DiscrepancyContent -> "Discrepancies"
+    | ApplicationContent app ->
+        let maxTitleLength = 20
+
+        //    let shortTitle =
+        //      if app.Title.Length > maxTitleLength then
+        //          app.Title.Substring(0, maxTitleLength) + "..."
+        //      else
+         //       app.Title
+
+        sprintf "%s: %s" app.ApplicationNumber app.ApplicationNumber
 let init () =
     let queryParams = findQuery (Router.currentPath())
     let resAppIds = queryParams |> List.choose (fun (key, value) -> if key = "resAppId" then Some value else None)
     let nonResAppIds = queryParams |> List.choose (fun (key, value) -> if key = "nonResAppId" then Some value else None)
+    let resOpenTabCmds  =
+        resAppIds
+        |> List.map (fun appId -> Cmd.ofMsg (OpenTab (ApplicationContent { ApplicationNumber = appId; RegisterType = Research })))
+    let nonResOpenTabCmds =
+        nonResAppIds
+        |> List.map (fun appId -> Cmd.ofMsg (OpenTab (ApplicationContent { ApplicationNumber = appId; RegisterType = NonResearch })))
     let emptyRegisterData = {
         Applications = NotStarted
         FrontPageEntries = NotStarted
@@ -90,23 +111,11 @@ let init () =
         LoadApplications(Start(NonResearch)) |> Cmd.ofMsg
         LoadFileResult(Start(Research)) |> Cmd.ofMsg
         LoadFileResult(Start(NonResearch)) |> Cmd.ofMsg
-
+        Cmd.batch resOpenTabCmds
+        Cmd.batch nonResOpenTabCmds
     ]
     model, cmd
-let createShortTitle =
-    function
-    | TableContent -> "Applications (Research)"
-    | DiscrepancyContent -> "Discrepancies"
-    | ApplicationContent app ->
-        let maxTitleLength = 20
 
-        //    let shortTitle =
-        //      if app.Title.Length > maxTitleLength then
-        //          app.Title.Substring(0, maxTitleLength) + "..."
-        //      else
-         //       app.Title
-
-        sprintf "%s: %s" app.ApplicationNumber app.ApplicationNumber
 
 let update msg model =
     match msg with
@@ -201,7 +210,7 @@ let update msg model =
                     | Some rt -> rt
                     | None -> Research
                 Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
-            | _ -> Cmd.none
+            | _ -> Cmd.ofMsg UpdatePathParams
 
     | OpenTab content ->
         let (id, title) =
@@ -232,7 +241,7 @@ let update msg model =
                     | Some rt -> rt
                     | None -> Research
                 Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
-            | _ -> Cmd.none
+            | _ -> Cmd.ofMsg UpdatePathParams
     | CloseTab id ->
         if id = "research" || id = "non-research" then
             model, Cmd.none // Can't close main tabs
@@ -244,7 +253,19 @@ let update msg model =
                     if model.ActiveTabId = id then
                         "research"
                     else model.ActiveTabId
-            }, Cmd.none
+            }, Cmd.ofMsg UpdatePathParams
+    | UpdatePathParams ->
+        // Get application tabs
+        let url =
+            model.OpenTabs |> List.map _.Content |> List.choose (function
+            | ApplicationContent app -> Some app.ApplicationNumber
+            | _ -> None)
+            |> List.distinct
+            |> List.map (fun app -> sprintf "resAppId=%s" app)
+            |> String.concat "&"
+            |> (fun x -> [$"?{x}"])
+        Router.nav url HistoryMode.PushState RouteMode.Path
+        model, Cmd.none
     | SetActiveTab tabId ->
         { model with ActiveTabId = tabId }, Cmd.none
 module ViewComponents =

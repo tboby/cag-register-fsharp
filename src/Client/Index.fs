@@ -156,7 +156,10 @@ let update msg model =
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
-            | TableContent -> "home", "Applications (Research)"
+            | TableContent ->
+                match model.CurrentRegisterType with
+                | Research -> "research", "Research Applications"
+                | NonResearch -> "non-research", "Non-Research Applications"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -179,7 +182,10 @@ let update msg model =
     | OpenTab content ->
         let (id, title) =
             match content with
-            | TableContent -> "home", "Applications (Research)"
+            | TableContent ->
+                match model.CurrentRegisterType with
+                | Research -> "research", "Research Applications"
+                | NonResearch -> "non-research", "Non-Research Applications"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -199,13 +205,18 @@ let update msg model =
                 Cmd.ofMsg (LoadDiscrepancies(Start(model.CurrentRegisterType)))
             | _ -> Cmd.none
     | CloseTab id ->
-        if id = "home" then
-            model, Cmd.none // Can't close home tab
+        if id = "research" || id = "non-research" then
+            model, Cmd.none // Can't close main tabs
         else
             let newTabs = model.OpenTabs |> List.filter (fun t -> t.Id <> id)
             { model with
                 OpenTabs = newTabs
-                ActiveTabId = if model.ActiveTabId = id then "home" else model.ActiveTabId
+                ActiveTabId =
+                    if model.ActiveTabId = id then
+                        match model.CurrentRegisterType with
+                        | Research -> "research"
+                        | NonResearch -> "non-research"
+                    else model.ActiveTabId
             }, Cmd.none
     | SetActiveTab tabId ->
         let registerType =
@@ -240,14 +251,24 @@ module ViewComponents =
                 Html.ul [
                     Html.li [
                         Html.a [
-                            prop.className (if model.ActiveTabId = "home" then "font-bold" else "")
-                            prop.onClick (fun _ -> dispatch (SetActiveTab "home"))
+                            prop.className (
+                                if model.ActiveTabId = "research" || model.ActiveTabId = "non-research"
+                                then "font-bold"
+                                else ""
+                            )
+                            prop.onClick (fun _ ->
+                                dispatch (SetActiveTab (
+                                    match model.CurrentRegisterType with
+                                    | Research -> "research"
+                                    | NonResearch -> "non-research"
+                                ))
+                            )
                             prop.text "Applications"
                         ]
                     ]
                     // Show current application tab if one is active
                     match model.OpenTabs |> List.tryFind (fun t -> t.Id = model.ActiveTabId) with
-                    | Some tab when tab.Id <> "home" && tab.Id <> "discrepancies" ->
+                    | Some tab when tab.Id <> "research" && tab.Id <> "non-research" ->
                         Html.li [
                             Html.a [
                                 prop.className "font-bold"
@@ -829,14 +850,15 @@ module ViewComponents =
                     prop.className "flex space-x-2 p-2"
                     prop.children [
                         for tab in tabs -> renderTab tab activeTabId dispatch
-                        if List.length (List.filter (fun t -> t.Id <> "home") tabs) > 2 then
+                        if List.length (List.filter (fun t ->
+                            t.Id <> "research" && t.Id <> "non-research") tabs) > 2 then
                             yield Html.button [
                                 prop.className "btn btn-danger ml-2"
                                 prop.onClick (fun _ ->
-                                    // Dispatch a message to close all tabs
+                                    // Dispatch a message to close all tabs except main tabs
                                     tabs
                                     |> List.iter (fun t ->
-                                        if t.Id <> "home" then
+                                        if t.Id <> "research" && t.Id <> "non-research" then
                                             dispatch (CloseTab t.Id)
                                     )
                                 )

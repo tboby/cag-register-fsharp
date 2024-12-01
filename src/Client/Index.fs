@@ -1000,13 +1000,33 @@ let view model dispatch =
                     ]
 
                     // Always render both tables
-                    match model.Research.Applications with
-                    | Loaded researchApps ->
-                        TableTab model.Research Research (model.CurrentRegisterType = Research) dispatch
+                    match model.Research.Applications, model.CurrentRegisterType = Research with
+                    | NotStarted, true ->
+                        Html.div [
+                            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                            prop.text "Loading..."
+                        ]
+                    | Loading, true ->
+                        Html.div [
+                            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                            prop.text "Loading research applications..."
+                        ]
+                    | Loaded researchApps, visible ->
+                        TableTab model.Research Research visible dispatch
                     | _ -> Html.none
-                    match model.NonResearch.Applications with
-                    | Loaded nonResearchApps ->
-                        TableTab model.NonResearch NonResearch (model.CurrentRegisterType = NonResearch) dispatch
+                    match model.NonResearch.Applications, model.CurrentRegisterType = NonResearch with
+                    | NotStarted, true ->
+                        Html.div [
+                            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                            prop.text "Loading..."
+                        ]
+                    | Loading, true ->
+                        Html.div [
+                            prop.className "animate-pulse bg-white/80 rounded-md shadow-md p-8 text-center"
+                            prop.text "Loading non-research applications..."
+                        ]
+                    | Loaded nonResearchApps, visible ->
+                        TableTab model.NonResearch NonResearch visible dispatch
                     | _ -> Html.none
 
                     // Render other active tab content if not showing tables

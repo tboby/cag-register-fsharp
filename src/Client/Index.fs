@@ -9,7 +9,7 @@ open Fable.DateFunctions
 open System
 
 type TabContent =
-    | TableContent of RegisterType
+    | TableContent
     | ApplicationContent of CagApplication
     | DiscrepancyContent
 
@@ -62,10 +62,10 @@ let init () =
         OpenTabs = [
             { Id = "research"
               Title = "Research"
-              Content = TableContent Research }
+              Content = TableContent }
             { Id = "non-research"
               Title = "Non-Research"
-              Content = TableContent NonResearch }
+              Content = TableContent }
         ]
         ActiveTabId = "research"
         CurrentRegisterType = Research
@@ -77,7 +77,7 @@ let init () =
     model, cmd
 let createShortTitle =
     function
-    | TableContent registerType -> sprintf "Applications (%s)" (string registerType)
+    | TableContent -> "Applications (Research)"
     | DiscrepancyContent -> "Discrepancies"
     | ApplicationContent app ->
         let maxTitleLength = 20
@@ -156,7 +156,7 @@ let update msg model =
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
-            | TableContent registerType -> "home", sprintf "Applications (%s)" (string registerType)
+            | TableContent -> "home", "Applications (Research)"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -179,7 +179,7 @@ let update msg model =
     | OpenTab content ->
         let (id, title) =
             match content with
-            | TableContent registerType -> "home", sprintf "Applications (%s)" (string registerType)
+            | TableContent -> "home", "Applications (Research)"
             | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
@@ -260,7 +260,7 @@ module ViewComponents =
         ]
 
     [<ReactComponent>]
-    let applicationTable (visible: bool) (apps: CagApplication list) (registerType: RegisterType) dispatch =
+    let applicationTable (apps: CagApplication list) (registerType: RegisterType) (isVisible: bool) dispatch =
         // Memoize column definitions
         let columnDefs = React.useMemo((fun () -> [
             ColumnDef.create [
@@ -389,41 +389,41 @@ module ViewComponents =
                 | _ -> false
             ) |}), [| |])
 
-        if not visible then
-            Html.none
-        else
-            Html.div [
-                prop.className "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
-                prop.children [
-                    Html.div [
-                        prop.className "flex justify-end mb-4"
-                        prop.children [
-                            Html.button [
-                                prop.className "btn btn-primary"
-                                prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
-                                prop.text "View Discrepancies"
-                            ]
+        Html.div [
+            prop.className [
+                "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
+                if not isVisible then "hidden"
+            ]
+            prop.children [
+                Html.div [
+                    prop.className "flex justify-end mb-4"
+                    prop.children [
+                        Html.button [
+                            prop.className "btn btn-primary"
+                            prop.onClick (fun _ -> dispatch (OpenAndFocusTab DiscrepancyContent))
+                            prop.text "View Discrepancies"
                         ]
-                    ]
-                    AgGrid.grid [
-                        agGridProp("key", sprintf "applications-%s" (string registerType))
-                        agGridProp("gridId", sprintf "applications-%s" (string registerType))
-                        agGridProp("id", sprintf "applications-%s" (string registerType))
-                        AgGrid.rowData (apps |> Array.ofList)
-                        AgGrid.defaultColDef [
-                            ColumnDef.resizable true
-                            ColumnDef.sortable true
-                            ColumnDef.filter RowFilter.Text
-                        ]
-                        agGridProp("rowClassRules", rowClassRules)
-                        AgGrid.columnDefs columnDefs
-                        AgGrid.pagination true
-                        AgGrid.paginationPageSize 10
-                        AgGrid.domLayout DOMLayout.AutoHeight
-                        agGridProp("tooltipShowDelay", 200)
                     ]
                 ]
+                AgGrid.grid [
+                    agGridProp("key", sprintf "applications-%A" registerType)
+                    agGridProp("gridId", sprintf "applications-%A" registerType)
+                    agGridProp("id", sprintf "applications-%A" registerType)
+                    AgGrid.rowData (apps |> Array.ofList)
+                    AgGrid.defaultColDef [
+                        ColumnDef.resizable true
+                        ColumnDef.sortable true
+                        ColumnDef.filter RowFilter.Text
+                    ]
+                    agGridProp("rowClassRules", rowClassRules)
+                    AgGrid.columnDefs columnDefs
+                    AgGrid.pagination true
+                    AgGrid.paginationPageSize 10
+                    AgGrid.domLayout DOMLayout.AutoHeight
+                    agGridProp("tooltipShowDelay", 200)
+                ]
             ]
+        ]
 
     let replaceNewlinesWithBr (text: string) =
         let mergeWhitespace (text: string) =
@@ -752,9 +752,9 @@ module ViewComponents =
 
     let tabContent (visible: bool) (tab: TabState) model dispatch =
         match tab.Content with
-        | TableContent registerType ->
+        | TableContent ->
             let registerData =
-                match registerType with
+                match model.CurrentRegisterType with
                 | Research -> model.Research
                 | NonResearch -> model.NonResearch
             match registerData.Applications with
@@ -771,7 +771,7 @@ module ViewComponents =
                     prop.text "Loading applications..."
                 ]
             | Loaded apps ->
-                applicationTable visible apps registerType dispatch
+                applicationTable apps model.CurrentRegisterType visible dispatch
             | _ -> Html.none
         | ApplicationContent app ->
             if visible then
@@ -905,7 +905,7 @@ module ViewComponents =
         ]
 
 [<ReactComponent>]
-let TableTab (registerType: RegisterType) (registerData: RegisterData) dispatch =
+let TableTab (registerData: RegisterData) (registerType: RegisterType) (visible: bool) dispatch =
     match registerData.Applications with
     | NotStarted ->
         dispatch (LoadApplications(Start(registerType)))
@@ -920,7 +920,7 @@ let TableTab (registerType: RegisterType) (registerData: RegisterData) dispatch 
             prop.text "Loading applications..."
         ]
     | Loaded apps ->
-        ViewComponents.applicationTable true apps registerType dispatch
+        ViewComponents.applicationTable apps registerType visible dispatch
 
 [<ReactComponent>]
 let ApplicationTab (app: CagApplication) dispatch =
@@ -977,17 +977,21 @@ let view model dispatch =
                         ]
                     ]
 
-                    //Render the active tab
+                    // Always render both tables
+                    match model.Research.Applications with
+                    | Loaded researchApps ->
+                        TableTab model.Research Research (model.CurrentRegisterType = Research) dispatch
+                    | _ -> Html.none
+                    match model.NonResearch.Applications with
+                    | Loaded nonResearchApps ->
+                        TableTab model.NonResearch NonResearch (model.CurrentRegisterType = NonResearch) dispatch
+                    | _ -> Html.none
+
+                    // Render other active tab content if not showing tables
                     let activeTab = model.OpenTabs |> List.find (fun t -> t.Id = model.ActiveTabId)
                     match activeTab.Content with
-                    | TableContent registerType ->
-                        let registerData =
-                            match registerType with
-                            | Research -> model.Research
-                            | NonResearch -> model.NonResearch
-                        TableTab registerType registerData dispatch
-                    | ApplicationContent app ->
-                        ApplicationTab app dispatch
+                    | TableContent -> Html.none // Tables are already rendered above
+                    | ApplicationContent app -> ApplicationTab app dispatch
                     | DiscrepancyContent ->
                         let registerData =
                             match model.CurrentRegisterType with

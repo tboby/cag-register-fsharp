@@ -7,6 +7,7 @@ open Feliz
 open Feliz.AgGrid
 open Fable.DateFunctions
 open System
+open Feliz.Router
 
 let getRegisterTypeFromTabId = function
     | "research" -> Some Research
@@ -48,10 +49,22 @@ type Msg =
     | CloseTab of string
     | SetActiveTab of string
 
+let findQuery (segments: string list) : (string * string) list =
+    segments
+    |> List.choose (function
+        | Route.Query parameters -> Some parameters
+        | _ -> None)
+    |> List.tryHead
+    |> function
+        | Some parameters -> parameters
+        | None -> []
 
 let applicationsApi =
     Api.makeProxy<ICagApplicationsApi> ()
 let init () =
+    let queryParams = findQuery (Router.currentPath())
+    let resAppIds = queryParams |> List.choose (fun (key, value) -> if key = "resAppId" then Some value else None)
+    let nonResAppIds = queryParams |> List.choose (fun (key, value) -> if key = "nonResAppId" then Some value else None)
     let emptyRegisterData = {
         Applications = NotStarted
         FrontPageEntries = NotStarted
@@ -77,6 +90,7 @@ let init () =
         LoadApplications(Start(NonResearch)) |> Cmd.ofMsg
         LoadFileResult(Start(Research)) |> Cmd.ofMsg
         LoadFileResult(Start(NonResearch)) |> Cmd.ofMsg
+
     ]
     model, cmd
 let createShortTitle =
@@ -92,7 +106,7 @@ let createShortTitle =
             else
                 app.Title
 
-        sprintf "%s: %s" app.ApplicationNumber shortTitle
+        sprintf "%s: %s" app.ApplicationNumber.ApplicationNumber shortTitle
 
 let update msg model =
     match msg with
@@ -166,7 +180,7 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | ApplicationContent app -> app.ApplicationNumber.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -197,7 +211,7 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | ApplicationContent app -> app.ApplicationNumber.ApplicationNumber, createShortTitle content
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -313,7 +327,7 @@ module ViewComponents =
                 ColumnDef.filter RowFilter.Text
                 ColumnDef.headerName "App #"
                 ColumnDef.width 100
-                ColumnDef.valueGetter (fun x -> x.ApplicationNumber)
+                ColumnDef.valueGetter (fun x -> x.ApplicationNumber.ApplicationNumber)
                 if registerType = NonResearch then
                     columnDefProp("sort", "desc")
             ]
@@ -472,7 +486,7 @@ module ViewComponents =
                             prop.children [
                                 Html.div [
                                     Html.strong "App #: "
-                                    Html.span app.ApplicationNumber
+                                    Html.span app.ApplicationNumber.ApplicationNumber
                                 ]
                                 Html.div [
                                     Html.strong "Reference: "
@@ -730,7 +744,7 @@ module ViewComponents =
                             for disc in discrepancies do
                                 let addRow (fieldName: string) (frontValue: string) (detailValue: string) =
                                     Html.tr [
-                                        Html.td disc.ApplicationNumber
+                                        Html.td disc.ApplicationNumber.ApplicationNumber
                                         Html.td fieldName
                                         Html.td (Html.div [ prop.innerHtml (replaceNewlinesWithBr frontValue) ])
                                         Html.td (Html.div [ prop.innerHtml (replaceNewlinesWithBr detailValue) ])

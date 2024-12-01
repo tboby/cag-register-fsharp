@@ -1,3 +1,5 @@
 SAFE.Client
 Feliz.AgGrid
 Fable.DateFunctions
+Fable.Elmish.Browser
+Feliz.Router

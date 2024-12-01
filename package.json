@@ -6,6 +6,8 @@
     },
     "scripts": {},
     "dependencies": {
+        "ag-grid-community": "^31.3.4",
+        "ag-grid-react": "^31.3.4",
         "date-fns": "^2.30.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
@@ -13,8 +15,6 @@
     "devDependencies": {
         "@types/node": "^20.9.1",
         "@vitejs/plugin-react": "^4.2.0",
-        "ag-grid-community": "^31.0.1",
-        "ag-grid-react": "^31.0.1",
         "autoprefixer": "^10.4.16",
         "postcss": "^8.4.31",
         "sass": "^1.69.5",

@@ -195,7 +195,7 @@ module CagRegisterXLSM =
             let appStatus = getHiddenRowStatus indexSheet appNo
             let cellRefs = getCellReferences registerType
             let app = {
-                ApplicationNumber = appNo
+                ApplicationNumber = { RegisterType = registerType; ApplicationNumber = appNo }
                 Reference = sheet.Cells.["B4"].Text
                 OtherRefs =
                     let refs = sheet.Cells.["B5"].Text // Use string access
@@ -310,7 +310,7 @@ module CagRegisterXLSM =
                 try
                     let isHidden = indexSheet.Row(row).Hidden
                     Some {
-                        ApplicationNumber = appNo
+                        ApplicationNumber = { RegisterType = registerType; ApplicationNumber = appNo }
                         Reference = indexSheet.Cells.[row, columns.Reference].Text
                         Title = indexSheet.Cells.[row, columns.Title].Text
                         Status = indexSheet.Cells.[row, columns.Status].Text

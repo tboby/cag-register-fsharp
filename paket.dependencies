@@ -6,7 +6,9 @@ nuget ClosedXML
 nuget EPPlus
 nuget Expecto ~> 9
 nuget Fable.DateFunctions
+nuget Fable.Elmish.Browser
 nuget Feliz.AgGrid
+nuget Feliz.Router
 nuget Microsoft.NET.Test.Sdk
 nuget SAFE.Server ~> 5
 nuget SAFE.Client ~> 5

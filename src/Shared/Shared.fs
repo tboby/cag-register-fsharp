@@ -47,8 +47,17 @@ type ApplicationStatus =
     | Active
     | Obsolete
 
-type CagApplication = {
+type RegisterType =
+    | Research
+    | NonResearch
+
+type CagApplicationId = {
+    RegisterType: RegisterType
     ApplicationNumber: string
+}
+
+type CagApplication = {
+    ApplicationNumber: CagApplicationId
     Reference: string
     OtherRefs: string option
     Title: string
@@ -79,7 +88,7 @@ type CagApplication = {
 }
 
 type CagFrontPageEntry = {
-    ApplicationNumber: string
+    ApplicationNumber: CagApplicationId
     Reference: string
     Title: string
     Status: string
@@ -106,15 +115,13 @@ type ApplicationDiscrepancyDifferences = {
 }
 
 type ApplicationDiscrepancy = {
-    ApplicationNumber: string
+    ApplicationNumber: CagApplicationId
     FrontPage: CagFrontPageEntry
     Detail: CagApplication
     Differences: ApplicationDiscrepancyDifferences
 }
 
-type RegisterType =
-    | Research
-    | NonResearch
+
 
 type FileLoadResult = {
     LoadedFile: string

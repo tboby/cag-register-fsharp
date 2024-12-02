@@ -346,11 +346,11 @@ let update msg model =
         // Get application tabs
         let url =
             model.OpenTabs |> List.map _.Content |> List.choose (function
-            | ApplicationContent app -> Some app.ApplicationNumber
+            | ApplicationContent app -> Some app
             | _ -> None)
             |> List.distinct
             // research to resAppId, non-research to nonResAppId
-            |> List.map (fun app -> sprintf "%sAppId=%s" (if model.ActiveTabId = "research" then "res" else "nonRes") app)
+            |> List.map (fun app -> sprintf "%sAppId=%s" (if app.RegisterType = Research then "res" else "nonRes") app.ApplicationNumber)
             |> String.concat "&"
             |> (fun x -> [$"?{x}"])
         Router.nav url HistoryMode.PushState RouteMode.Path

@@ -9,6 +9,11 @@ open Fable.DateFunctions
 open System
 open Feliz.Router
 
+let getDisplayNameFromApplication (app: CagApplication) =
+    sprintf "%s: %s" app.ApplicationNumber.ApplicationNumber
+        (let firstLine = app.Title.Split('\n').[0].Trim()
+         if firstLine.Length > 50 then firstLine.Substring(0, 47) + "..."
+         else firstLine)
 
 let getRegisterTypeFromTabId = function
     | "research" -> Some Research
@@ -45,6 +50,7 @@ type Msg =
     | LoadFrontPageEntries of ApiCall<RegisterType, FrontPageEntriesResponse>
     | LoadDiscrepancies of ApiCall<RegisterType, DiscrepanciesResponse>
     | LoadFileResult of ApiCall<RegisterType, FileLoadResultResponse>
+    | LoadDisplayNames of ApiCall<RegisterType, ApplicationDisplayNameResponse>
     | OpenTab of TabContent
     | OpenAndFocusTab of TabContent
     | CloseTab of string
@@ -81,12 +87,26 @@ let init () =
     let queryParams = findQuery (Router.currentPath())
     let resAppIds = queryParams |> List.choose (fun (key, value) -> if key = "resAppId" then Some value else None)
     let nonResAppIds = queryParams |> List.choose (fun (key, value) -> if key = "nonResAppId" then Some value else None)
-    let resOpenTabCmds  =
+
+    printfn "Initializing with research app IDs: %A" resAppIds
+    printfn "Initializing with non-research app IDs: %A" nonResAppIds
+
+    let displayNameCmds = [
+        if not (List.isEmpty resAppIds) then
+            printfn "Will load research display names"
+            LoadDisplayNames(Start(Research)) |> Cmd.ofMsg
+        if not (List.isEmpty nonResAppIds) then
+            printfn "Will load non-research display names"
+            LoadDisplayNames(Start(NonResearch)) |> Cmd.ofMsg
+    ]
+
+    let resOpenTabCmds =
         resAppIds
         |> List.map (fun appId -> Cmd.ofMsg (OpenTab (ApplicationContent { ApplicationNumber = appId; RegisterType = Research })))
     let nonResOpenTabCmds =
         nonResAppIds
         |> List.map (fun appId -> Cmd.ofMsg (OpenTab (ApplicationContent { ApplicationNumber = appId; RegisterType = NonResearch })))
+
     let emptyRegisterData = {
         Applications = NotStarted
         FrontPageEntries = NotStarted
@@ -108,12 +128,13 @@ let init () =
         ActiveTabId = "research"
     }
     let cmd = Cmd.batch [
+        Cmd.batch resOpenTabCmds
+        Cmd.batch nonResOpenTabCmds
         LoadApplications(Start(Research)) |> Cmd.ofMsg
         LoadApplications(Start(NonResearch)) |> Cmd.ofMsg
         LoadFileResult(Start(Research)) |> Cmd.ofMsg
         LoadFileResult(Start(NonResearch)) |> Cmd.ofMsg
-        Cmd.batch resOpenTabCmds
-        Cmd.batch nonResOpenTabCmds
+        Cmd.batch displayNameCmds
     ]
     model, cmd
 
@@ -133,10 +154,25 @@ let update msg model =
                 NonResearch = if registerType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
         | Finished response ->
             let updateRegisterData data = { data with RegisterData.Applications = Loaded response.Applications }
+            let updatedTabs =
+                model.OpenTabs
+                |> List.map (fun tab ->
+                    match tab.Content with
+                    | ApplicationContent appId when appId.RegisterType = response.RegisterType ->
+                        match response.Applications |> List.tryFind (fun app -> app.ApplicationNumber.ApplicationNumber = appId.ApplicationNumber) with
+                        | Some app ->
+                            printfn "Updating tab %s with display name from loaded application" tab.Id
+                            { tab with Title = getDisplayNameFromApplication app }
+                        | None ->
+                            printfn "No application found for tab %s" tab.Id
+                            tab
+                    | _ -> tab
+                )
             let cmd = Cmd.ofMsg (LoadFileResult(Start(response.RegisterType)))
             { model with
                 Research = if response.RegisterType = Research then updateRegisterData model.Research else model.Research
-                NonResearch = if response.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, cmd
+                NonResearch = if response.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch
+                OpenTabs = updatedTabs }, cmd
     | LoadFrontPageEntries msg ->
         match msg with
         | Start registerType ->
@@ -182,6 +218,29 @@ let update msg model =
             { model with
                 Research = if result.RegisterType = Research then updateRegisterData model.Research else model.Research
                 NonResearch = if result.RegisterType = NonResearch then updateRegisterData model.NonResearch else model.NonResearch }, Cmd.none
+    | LoadDisplayNames msg ->
+        match msg with
+        | Start registerType ->
+            printfn "Loading display names for %A" registerType
+            let cmd = Cmd.OfAsync.perform applicationsApi.getApplicationDisplayNames registerType (Finished >> LoadDisplayNames)
+            model, cmd
+        | Finished response ->
+            printfn "Received display names for %A: %d names" response.RegisterType (Map.count response.ApplicationDisplayNames)
+            let updatedTabs =
+                model.OpenTabs
+                |> List.map (fun tab ->
+                    match tab.Content with
+                    | ApplicationContent app when app.RegisterType = response.RegisterType ->
+                        match Map.tryFind app.ApplicationNumber response.ApplicationDisplayNames with
+                        | Some displayName ->
+                            printfn "Updating tab %s with display name: %s" tab.Id displayName
+                            { tab with Title = displayName }
+                        | None ->
+                            printfn "No display name found for application %s" app.ApplicationNumber
+                            tab
+                    | _ -> tab
+                )
+            { model with OpenTabs = updatedTabs }, Cmd.none
     | OpenAndFocusTab content ->
         let (id, title) =
             match content with
@@ -190,7 +249,15 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | ApplicationContent app ->
+                // Try to get application from loaded data first
+                let registerData = if app.RegisterType = Research then model.Research else model.NonResearch
+                match registerData.Applications with
+                | Loaded apps ->
+                    match apps |> List.tryFind (fun a -> a.ApplicationNumber.ApplicationNumber = app.ApplicationNumber) with
+                    | Some loadedApp -> app.ApplicationNumber, getDisplayNameFromApplication loadedApp
+                    | None -> app.ApplicationNumber, sprintf "Loading %s..." app.ApplicationNumber
+                | _ -> app.ApplicationNumber, sprintf "Loading %s..." app.ApplicationNumber
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -203,15 +270,21 @@ let update msg model =
                 Title = title
                 Content = content
             }
-            { model with OpenTabs = model.OpenTabs @ [newTab]; ActiveTabId = id },
-            match content with
-            | DiscrepancyContent ->
-                let registerType =
-                    match getRegisterTypeFromTabId model.ActiveTabId with
-                    | Some rt -> rt
-                    | None -> Research
-                Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
-            | _ -> Cmd.ofMsg UpdatePathParams
+            let cmd =
+                match content with
+                | ApplicationContent app ->
+                    Cmd.batch [
+                        Cmd.ofMsg (LoadDisplayNames(Start(app.RegisterType)))
+                        Cmd.ofMsg UpdatePathParams
+                    ]
+                | DiscrepancyContent ->
+                    let registerType =
+                        match getRegisterTypeFromTabId model.ActiveTabId with
+                        | Some rt -> rt
+                        | None -> Research
+                    Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
+                | _ -> Cmd.ofMsg UpdatePathParams
+            { model with OpenTabs = model.OpenTabs @ [newTab]; ActiveTabId = id }, cmd
 
     | OpenTab content ->
         let (id, title) =
@@ -221,7 +294,15 @@ let update msg model =
                 | Some Research -> "research", "Research Applications"
                 | Some NonResearch -> "non-research", "Non-Research Applications"
                 | None -> "research", "Research Applications"
-            | ApplicationContent app -> app.ApplicationNumber, createShortTitle content
+            | ApplicationContent app ->
+                // Try to get application from loaded data first
+                let registerData = if app.RegisterType = Research then model.Research else model.NonResearch
+                match registerData.Applications with
+                | Loaded apps ->
+                    match apps |> List.tryFind (fun a -> a.ApplicationNumber.ApplicationNumber = app.ApplicationNumber) with
+                    | Some loadedApp -> app.ApplicationNumber, getDisplayNameFromApplication loadedApp
+                    | None -> app.ApplicationNumber, sprintf "Loading %s..." app.ApplicationNumber
+                | _ -> app.ApplicationNumber, sprintf "Loading %s..." app.ApplicationNumber
             | DiscrepancyContent -> "discrepancies", "Discrepancies"
 
         let existingTab = model.OpenTabs |> List.tryFind (fun t -> t.Id = id)
@@ -234,15 +315,21 @@ let update msg model =
                 Title = title
                 Content = content
             }
-            { model with OpenTabs = model.OpenTabs @ [newTab] },
-            match content with
-            | DiscrepancyContent ->
-                let registerType =
-                    match getRegisterTypeFromTabId model.ActiveTabId with
-                    | Some rt -> rt
-                    | None -> Research
-                Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
-            | _ -> Cmd.ofMsg UpdatePathParams
+            let cmd =
+                match content with
+                | ApplicationContent app ->
+                    Cmd.batch [
+                        Cmd.ofMsg (LoadDisplayNames(Start(app.RegisterType)))
+                        Cmd.ofMsg UpdatePathParams
+                    ]
+                | DiscrepancyContent ->
+                    let registerType =
+                        match getRegisterTypeFromTabId model.ActiveTabId with
+                        | Some rt -> rt
+                        | None -> Research
+                    Cmd.ofMsg (LoadDiscrepancies(Start(registerType)))
+                | _ -> Cmd.ofMsg UpdatePathParams
+            { model with OpenTabs = model.OpenTabs @ [newTab] }, cmd
     | CloseTab id ->
         if id = "research" || id = "non-research" then
             model, Cmd.none // Can't close main tabs

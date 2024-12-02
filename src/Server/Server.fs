@@ -404,6 +404,35 @@ module CagRegisterXLSM =
     let getCurrentLoadResult registerType =
         currentLoadResult |> Option.filter (fun r -> r.RegisterType = registerType)
 
+    let getApplicationDisplayNames registerType =
+        printfn "Getting display names for %A" registerType
+        use package = new ExcelPackage(new FileInfo(getRegisterFilePath registerType))
+        let indexSheet = package.Workbook.Worksheets.[0]
+        let columns = getFrontPageColumnIndices(registerType)
+
+        let displayNames =
+            [2..indexSheet.Dimension.End.Row]
+            |> List.choose (fun row ->
+                let appNo = indexSheet.Cells.[row, 1].Text
+                if System.String.IsNullOrWhiteSpace(appNo) then None
+                else
+                    let title = indexSheet.Cells.[row, columns.Title].Text
+                    let shortTitle =
+                        if String.IsNullOrWhiteSpace(title) then appNo
+                        else
+                            let firstLine = title.Split('\n').[0].Trim()
+                            if firstLine.Length > 50 then
+                                firstLine.Substring(0, 47) + "..."
+                            else firstLine
+                    let displayName = sprintf "%s: %s" appNo shortTitle
+                    printfn "Created display name for %s: %s" appNo displayName
+                    Some (appNo, displayName)
+            )
+            |> Map.ofList
+
+        printfn "Returning %d display names for %A" (Map.count displayNames) registerType
+        displayNames
+
 module Storage =
     let todos =
         ResizeArray [
@@ -445,6 +474,10 @@ let applicationsApi ctx = {
     }
     getFileLoadResult = fun registerType -> async {
         return { RegisterType = registerType; FileLoadResult = CagRegisterXLSM.getCurrentLoadResult registerType }
+    }
+    getApplicationDisplayNames = fun registerType -> async {
+        let displayNames = CagRegisterXLSM.getApplicationDisplayNames registerType
+        return { RegisterType = registerType; ApplicationDisplayNames = displayNames }
     }
 }
 

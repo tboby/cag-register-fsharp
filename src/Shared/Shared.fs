@@ -150,9 +150,15 @@ type FileLoadResultResponse = {
     FileLoadResult: FileLoadResult option
 }
 
+type ApplicationDisplayNameResponse = {
+    RegisterType: RegisterType
+    ApplicationDisplayNames: Map<string, string>  // Map from application number to display name
+}
+
 type ICagApplicationsApi = {
     getApplications: RegisterType -> Async<ApplicationsResponse>
     getFrontPageEntries: RegisterType -> Async<FrontPageEntriesResponse>
     getDiscrepancies: RegisterType -> Async<DiscrepanciesResponse>
     getFileLoadResult: RegisterType -> Async<FileLoadResultResponse>
+    getApplicationDisplayNames: RegisterType -> Async<ApplicationDisplayNameResponse>
 }

@@ -9,6 +9,7 @@ open Fable.DateFunctions
 open System
 open Feliz.Router
 
+
 let getRegisterTypeFromTabId = function
     | "research" -> Some Research
     | "non-research" -> Some NonResearch
@@ -261,7 +262,8 @@ let update msg model =
             | ApplicationContent app -> Some app.ApplicationNumber
             | _ -> None)
             |> List.distinct
-            |> List.map (fun app -> sprintf "resAppId=%s" app)
+            // research to resAppId, non-research to nonResAppId
+            |> List.map (fun app -> sprintf "%sAppId=%s" (if model.ActiveTabId = "research" then "res" else "nonRes") app)
             |> String.concat "&"
             |> (fun x -> [$"?{x}"])
         Router.nav url HistoryMode.PushState RouteMode.Path

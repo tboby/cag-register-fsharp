@@ -1,0 +1,85 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"fsharp","items":[{"aliases":[],"languageName":"fsharp","name":"fsharp"}]}}
+
+#!csharp
+
+#r "nuget: PdfPig"
+
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Text;
+
+// Class to store application details
+public class CagApplication
+{
+    public string ApplicationNumber { get; set; }
+    public string Title { get; set; }
+    public string ChiefInvestigator { get; set; }
+    public string Sponsor { get; set; }
+    public string ApplicationType { get; set; }
+}
+
+// Function to extract CAG applications from text
+public static List<CagApplication> ExtractCagApplications(string text)
+{
+    var applications = new List<CagApplication>();
+
+    // Regular expression pattern to find CAG application sections
+    var pattern = @"(\d{2}/CAG/\d{4})(?:.*?)(?:Chief\s+Investigator:\s*(.*?))?(?:Sponsor:\s*(.*?))?(?:Application\s+type:\s*(.*?))?(?=\d{2}/CAG/\d{4}|\Z)";
+
+    var matches = Regex.Matches(text, pattern, RegexOptions.Singleline);
+
+    foreach (Match match in matches)
+    {
+        var app = new CagApplication
+        {
+            ApplicationNumber = match.Groups[1].Value.Trim(),
+            ChiefInvestigator = match.Groups[2].Value.Trim(),
+            Sponsor = match.Groups[3].Value.Trim(),
+            ApplicationType = match.Groups[4].Value.Trim()
+        };
+
+        // Try to extract title - it's usually between application number and Chief Investigator
+        var titlePattern = $"{app.ApplicationNumber}\\s+(.*?)(?=Chief|Sponsor|Application|$)";
+        var titleMatch = Regex.Match(text, titlePattern, RegexOptions.Singleline);
+        if (titleMatch.Success)
+        {
+            app.Title = titleMatch.Groups[1].Value.Trim();
+        }
+
+        applications.Add(app);
+    }
+
+    return applications;
+}
+
+// Main execution
+using (var document = PdfDocument.Open("Full_CAG_minutes_-_18_January_2024_-_redacted_for_publishing.pdf"))
+{
+    var fullText = new StringBuilder();
+
+    // Extract text from all pages
+    foreach (var page in document.GetPages())
+    {
+        fullText.Append(page.Text);
+    }
+
+    // Extract and display applications
+    var applications = ExtractCagApplications(fullText.ToString());
+
+    Console.WriteLine("CAG Applications found:");
+    Console.WriteLine("======================");
+
+    foreach (var app in applications)
+    {
+        Console.WriteLine($"\nApplication Number: {app.ApplicationNumber}");
+        Console.WriteLine($"Title: {app.Title}");
+        Console.WriteLine($"Chief Investigator: {app.ChiefInvestigator}");
+        Console.WriteLine($"Sponsor: {app.Sponsor}");
+        Console.WriteLine($"Application Type: {app.ApplicationType}");
+        Console.WriteLine("----------------------");
+    }
+}

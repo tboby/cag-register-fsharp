@@ -1,85 +1,278 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"fsharp","items":[{"aliases":[],"languageName":"fsharp","name":"fsharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"}]}}
 
 #!csharp
 
 #r "nuget: PdfPig"
+#r "nuget: sqlite-net-pcl"
+#r "nuget: Microsoft.Data.Sqlite"
 
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.Content;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
-using System.Text;
+using SQLite;
+using System.Security.Cryptography;
+using System.IO;
+using System.Net.Http;
+using Microsoft.Data.Sqlite;
 
-// Class to store application details
-public class CagApplication
+// Database models
+[Table("minutes")]
+public class MinuteRecord
 {
-    public string ApplicationNumber { get; set; }
+    [PrimaryKey, AutoIncrement]
+    public int Id { get; set; }
+    public int YearId { get; set; }
     public string Title { get; set; }
-    public string ChiefInvestigator { get; set; }
-    public string Sponsor { get; set; }
-    public string ApplicationType { get; set; }
+    public string Url { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
-// Function to extract CAG applications from text
-public static List<CagApplication> ExtractCagApplications(string text)
+[Table("ProcessedPdfs")]
+public class ProcessedPdf
 {
-    var applications = new List<CagApplication>();
+    [PrimaryKey]
+    public string Url { get; set; }
+    public string FileHash { get; set; }
+    public DateTime ProcessedDate { get; set; }
+}
 
-    // Regular expression pattern to find CAG application sections
-    var pattern = @"(\d{2}/CAG/\d{4})(?:.*?)(?:Chief\s+Investigator:\s*(.*?))?(?:Sponsor:\s*(.*?))?(?:Application\s+type:\s*(.*?))?(?=\d{2}/CAG/\d{4}|\Z)";
+[Table("CagReferences")]
+public class CagReference
+{
+    [PrimaryKey, AutoIncrement]
+    public int Id { get; set; }
+    [Indexed]
+    public string PdfUrl { get; set; }
+    [Indexed]
+    public string CagId { get; set; }
+    public string PageRanges { get; set; }
+    public DateTime ProcessedDate { get; set; }
+}
 
-    var matches = Regex.Matches(text, pattern, RegexOptions.Singleline);
+public class PdfProcessor
+{
+    private readonly SQLiteConnection _db;
+    private readonly HttpClient _client;
+    private readonly string _downloadDir;
 
-    foreach (Match match in matches)
+    public PdfProcessor(string dbPath, string downloadDir)
     {
-        var app = new CagApplication
-        {
-            ApplicationNumber = match.Groups[1].Value.Trim(),
-            ChiefInvestigator = match.Groups[2].Value.Trim(),
-            Sponsor = match.Groups[3].Value.Trim(),
-            ApplicationType = match.Groups[4].Value.Trim()
-        };
+        _db = new SQLiteConnection(dbPath);
+        _client = new HttpClient();
+        _downloadDir = downloadDir;
+        InitializeDatabase();
+    }
 
-        // Try to extract title - it's usually between application number and Chief Investigator
-        var titlePattern = $"{app.ApplicationNumber}\\s+(.*?)(?=Chief|Sponsor|Application|$)";
-        var titleMatch = Regex.Match(text, titlePattern, RegexOptions.Singleline);
-        if (titleMatch.Success)
+    private void InitializeDatabase()
+    {
+        _db.CreateTable<ProcessedPdf>();
+        _db.CreateTable<CagReference>();
+    }
+
+    private string CalculateFileHash(string filePath)
+    {
+        using var sha256 = SHA256.Create();
+        using var stream = File.OpenRead(filePath);
+        var hash = sha256.ComputeHash(stream);
+        return Convert.ToBase64String(hash);
+    }
+
+    private bool IsFileProcessed(string url, string currentHash)
+    {
+        var existingFile = _db.Table<ProcessedPdf>()
+            .FirstOrDefault(f => f.Url == url);
+        return existingFile?.FileHash == currentHash;
+    }
+
+    private List<string> GetPageRanges(HashSet<int> pages)
+    {
+        var ranges = new List<string>();
+        var orderedPages = pages.OrderBy(p => p).ToList();
+
+        int start = orderedPages[0];
+        int prev = start;
+
+        for (int i = 1; i <= orderedPages.Count; i++)
         {
-            app.Title = titleMatch.Groups[1].Value.Trim();
+            if (i == orderedPages.Count || orderedPages[i] != prev + 1)
+            {
+                ranges.Add(start == prev ? $"p{start}" : $"p{start}-p{prev}");
+                if (i < orderedPages.Count)
+                {
+                    start = orderedPages[i];
+                    prev = start;
+                }
+            }
+            else
+            {
+                prev = orderedPages[i];
+            }
         }
 
-        applications.Add(app);
+        return ranges;
     }
 
-    return applications;
+    private async Task<string> DownloadPdf(string url)
+    {
+        var fileName = Path.GetFileName(new Uri(url).LocalPath);
+        var filePath = Path.Combine(_downloadDir, fileName);
+
+        if (!File.Exists(filePath))
+        {
+            Console.WriteLine($"Downloading: {fileName}");
+            var pdfBytes = await _client.GetByteArrayAsync(url);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
+            await Task.Delay(1000); // Be polite to the server
+        }
+
+        return filePath;
+    }
+
+    private Dictionary<string, HashSet<int>> ProcessPdfFile(string filePath)
+    {
+        var idLocations = new Dictionary<string, HashSet<int>>();
+        var pattern = @"\d{2}/CAG/\d{4}";
+
+        using var document = PdfDocument.Open(filePath);
+        foreach (var page in document.GetPages())
+        {
+            var pageNumber = page.Number;
+            var matches = Regex.Matches(page.Text, pattern);
+
+            foreach (Match match in matches)
+            {
+                var id = match.Value;
+                if (!idLocations.ContainsKey(id))
+                {
+                    idLocations[id] = new HashSet<int>();
+                }
+                idLocations[id].Add(pageNumber);
+            }
+        }
+
+        return idLocations;
+    }
+
+    public async Task ProcessMinutes()
+    {
+        // Create download directory if it doesn't exist
+        Directory.CreateDirectory(_downloadDir);
+
+        // Get unprocessed minutes from the minutes database
+        using var minutesDb = new SqliteConnection("Data Source=minutes.db");
+        minutesDb.Open();
+
+        var command = minutesDb.CreateCommand();
+        command.CommandText = @"
+            SELECT m.url, m.title
+            FROM minutes m
+            WHERE m.url LIKE '%.pdf'";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var url = reader.GetString(0);
+            var title = reader.GetString(1);
+
+            try
+            {
+                // Check if we've already processed this URL
+                var processed = _db.Table<ProcessedPdf>()
+                    .FirstOrDefault(p => p.Url == url);
+
+                if (processed != null)
+                {
+                    Console.WriteLine($"Already processed: {title}");
+                    continue;
+                }
+
+                Console.WriteLine($"Processing: {title}");
+
+                // Download PDF
+                var filePath = await DownloadPdf(url);
+                var currentHash = CalculateFileHash(filePath);
+
+                var idLocations = ProcessPdfFile(filePath);
+
+                _db.RunInTransaction(() =>
+                {
+                    // Update processed file record
+                    _db.InsertOrReplace(new ProcessedPdf
+                    {
+                        Url = url,
+                        FileHash = currentHash,
+                        ProcessedDate = DateTime.UtcNow
+                    });
+
+                    // Remove existing CAG ID locations for this file
+                    _db.Execute("DELETE FROM CagReferences WHERE PdfUrl = ?", url);
+
+                    // Insert new locations
+                    foreach (var entry in idLocations)
+                    {
+                        var pageRanges = string.Join(", ", GetPageRanges(entry.Value));
+                        _db.Insert(new CagReference
+                        {
+                            PdfUrl = url,
+                            CagId = entry.Key,
+                            PageRanges = pageRanges,
+                            ProcessedDate = DateTime.UtcNow
+                        });
+                    }
+                });
+
+                Console.WriteLine($"Found {idLocations.Count} CAG references in {title}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing {title}: {ex.Message}");
+            }
+        }
+    }
+
+    public void DisplayResults()
+    {
+        var results = _db.Query<CagReference>(
+            @"SELECT CagId, GROUP_CONCAT(PdfUrl, CHAR(10)) as Pdfs,
+              GROUP_CONCAT(PageRanges, CHAR(10)) as Pages
+              FROM CagReferences
+              GROUP BY CagId
+              ORDER BY CagId");
+
+        Console.WriteLine("\nCAG Application IDs found across all files:");
+        Console.WriteLine("==========================================");
+
+        foreach (var result in results)
+        {
+            Console.WriteLine($"\n{result.CagId}:");
+            var pdfs = result.PdfUrl.Split('\n');
+            var pages = result.PageRanges.Split('\n');
+
+            for (int i = 0; i < pdfs.Length; i++)
+            {
+                Console.WriteLine($"  {Path.GetFileName(pdfs[i])}: {pages[i]}");
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _db?.Dispose();
+        _client?.Dispose();
+    }
 }
 
-// Main execution
-using (var document = PdfDocument.Open("Full_CAG_minutes_-_18_January_2024_-_redacted_for_publishing.pdf"))
-{
-    var fullText = new StringBuilder();
+#!csharp
 
-    // Extract text from all pages
-    foreach (var page in document.GetPages())
-    {
-        fullText.Append(page.Text);
-    }
+// Initialize and process
+var processor = new PdfProcessor(
+    dbPath: "cag_references.db",
+    downloadDir: "downloaded_pdfs"
+);
 
-    // Extract and display applications
-    var applications = ExtractCagApplications(fullText.ToString());
+// Process all PDFs from the minutes database
+await processor.ProcessMinutes();
 
-    Console.WriteLine("CAG Applications found:");
-    Console.WriteLine("======================");
-
-    foreach (var app in applications)
-    {
-        Console.WriteLine($"\nApplication Number: {app.ApplicationNumber}");
-        Console.WriteLine($"Title: {app.Title}");
-        Console.WriteLine($"Chief Investigator: {app.ChiefInvestigator}");
-        Console.WriteLine($"Sponsor: {app.Sponsor}");
-        Console.WriteLine($"Application Type: {app.ApplicationType}");
-        Console.WriteLine("----------------------");
-    }
-}
+// Display results
+processor.DisplayResults();

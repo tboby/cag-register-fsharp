@@ -15,6 +15,7 @@ using System.Security.Cryptography;
 using System.IO;
 using System.Net.Http;
 using Microsoft.Data.Sqlite;
+using System.Threading;
 
 // Database models
 [Table("minutes")]
@@ -55,6 +56,8 @@ public class PdfProcessor
     private readonly SQLiteConnection _db;
     private readonly HttpClient _client;
     private readonly string _downloadDir;
+    private readonly SemaphoreSlim _downloadThrottle = new SemaphoreSlim(3); // Max 3 concurrent downloads
+    private readonly SemaphoreSlim _dbLock = new SemaphoreSlim(1); // Lock for database access
 
     public PdfProcessor(string dbPath, string downloadDir)
     {
@@ -113,20 +116,33 @@ public class PdfProcessor
         return ranges;
     }
 
-    private async Task<string> DownloadPdf(string url)
+    private async Task<(string FilePath, string Hash)?> DownloadAndHashPdf(string url, string title)
     {
-        var fileName = Path.GetFileName(new Uri(url).LocalPath);
-        var filePath = Path.Combine(_downloadDir, fileName);
-
-        if (!File.Exists(filePath))
+        try
         {
-            Console.WriteLine($"Downloading: {fileName}");
-            var pdfBytes = await _client.GetByteArrayAsync(url);
-            await File.WriteAllBytesAsync(filePath, pdfBytes);
-            await Task.Delay(1000); // Be polite to the server
-        }
+            await _downloadThrottle.WaitAsync();
+            var fileName = Path.GetFileName(new Uri(url).LocalPath);
+            var filePath = Path.Combine(_downloadDir, fileName);
 
-        return filePath;
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"Downloading: {title}");
+                var pdfBytes = await _client.GetByteArrayAsync(url);
+                await File.WriteAllBytesAsync(filePath, pdfBytes);
+            }
+
+            var hash = CalculateFileHash(filePath);
+            return (filePath, hash);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading {title}: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            _downloadThrottle.Release();
+        }
     }
 
     private Dictionary<string, HashSet<int>> ProcessPdfFile(string filePath)
@@ -154,54 +170,42 @@ public class PdfProcessor
         return idLocations;
     }
 
-    public async Task ProcessMinutes()
+    private async Task ProcessPdfEntry(string url, string title)
     {
-        // Create download directory if it doesn't exist
-        Directory.CreateDirectory(_downloadDir);
-
-        // Get unprocessed minutes from the minutes database
-        using var minutesDb = new SqliteConnection("Data Source=minutes.db");
-        minutesDb.Open();
-
-        var command = minutesDb.CreateCommand();
-        command.CommandText = @"
-            SELECT m.url, m.title
-            FROM minutes m
-            WHERE m.url LIKE '%.pdf'";
-
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        try
         {
-            var url = reader.GetString(0);
-            var title = reader.GetString(1);
+            // Check if already processed
+            await _dbLock.WaitAsync();
+            var processed = _db.Table<ProcessedPdf>()
+                .FirstOrDefault(p => p.Url == url);
+            _dbLock.Release();
 
+            if (processed != null)
+            {
+                Console.WriteLine($"Already processed: {title}");
+                return;
+            }
+
+            // Download and hash the PDF
+            var result = await DownloadAndHashPdf(url, title);
+            if (result == null) return;
+
+            var (filePath, hash) = result.Value;
+
+            // Process the PDF for CAG references
+            var idLocations = ProcessPdfFile(filePath);
+
+            // Save results to database
+            await _dbLock.WaitAsync();
             try
             {
-                // Check if we've already processed this URL
-                var processed = _db.Table<ProcessedPdf>()
-                    .FirstOrDefault(p => p.Url == url);
-
-                if (processed != null)
-                {
-                    Console.WriteLine($"Already processed: {title}");
-                    continue;
-                }
-
-                Console.WriteLine($"Processing: {title}");
-
-                // Download PDF
-                var filePath = await DownloadPdf(url);
-                var currentHash = CalculateFileHash(filePath);
-
-                var idLocations = ProcessPdfFile(filePath);
-
                 _db.RunInTransaction(() =>
                 {
                     // Update processed file record
                     _db.InsertOrReplace(new ProcessedPdf
                     {
                         Url = url,
-                        FileHash = currentHash,
+                        FileHash = hash,
                         ProcessedDate = DateTime.UtcNow
                     });
 
@@ -221,38 +225,85 @@ public class PdfProcessor
                         });
                     }
                 });
-
-                Console.WriteLine($"Found {idLocations.Count} CAG references in {title}");
             }
-            catch (Exception ex)
+            finally
             {
-                Console.WriteLine($"Error processing {title}: {ex.Message}");
+                _dbLock.Release();
+            }
+
+            Console.WriteLine($"Found {idLocations.Count} CAG references in {title}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing {title}: {ex.Message}");
+        }
+    }
+
+    public async Task ProcessMinutes()
+    {
+        // Create download directory if it doesn't exist
+        Directory.CreateDirectory(_downloadDir);
+
+        // Get all PDF minutes from the database
+        using var minutesDb = new SqliteConnection("Data Source=minutes.db");
+        minutesDb.Open();
+
+        var command = minutesDb.CreateCommand();
+        command.CommandText = @"
+            SELECT m.url, m.title
+            FROM minutes m
+            WHERE m.url LIKE '%.pdf'";
+
+        var pdfsToProcess = new List<(string Url, string Title)>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                pdfsToProcess.Add((
+                    reader.GetString(0), // url
+                    reader.GetString(1)  // title
+                ));
             }
         }
+
+        // Process PDFs in parallel with throttling
+        var tasks = pdfsToProcess.Select(pdf =>
+            ProcessPdfEntry(pdf.Url, pdf.Title)
+        );
+
+        await Task.WhenAll(tasks);
     }
 
     public void DisplayResults()
     {
-        var results = _db.Query<CagReference>(
-            @"SELECT CagId, GROUP_CONCAT(PdfUrl, CHAR(10)) as Pdfs,
-              GROUP_CONCAT(PageRanges, CHAR(10)) as Pages
-              FROM CagReferences
-              GROUP BY CagId
-              ORDER BY CagId");
-
-        Console.WriteLine("\nCAG Application IDs found across all files:");
-        Console.WriteLine("==========================================");
-
-        foreach (var result in results)
+        try
         {
-            Console.WriteLine($"\n{result.CagId}:");
-            var pdfs = result.PdfUrl.Split('\n');
-            var pages = result.PageRanges.Split('\n');
+            var results = _db.Table<CagReference>()
+                .OrderBy(r => r.CagId)
+                .ToList()
+                .GroupBy(r => r.CagId);
 
-            for (int i = 0; i < pdfs.Length; i++)
+            Console.WriteLine("\nCAG Application IDs found across all files:");
+            Console.WriteLine("==========================================");
+
+            foreach (var group in results)
             {
-                Console.WriteLine($"  {Path.GetFileName(pdfs[i])}: {pages[i]}");
+                Console.WriteLine($"\n{group.Key}:");  // group.Key is the CagId
+                foreach (var reference in group)
+                {
+                    Console.WriteLine($"  {Path.GetFileName(reference.PdfUrl)}: {reference.PageRanges}");
+                }
             }
+
+            // Print summary
+            Console.WriteLine("\nSummary:");
+            Console.WriteLine("========");
+            Console.WriteLine($"Total unique CAG IDs found: {results.Count()}");
+            Console.WriteLine($"Total references found: {results.Sum(g => g.Count())}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error displaying results: {ex.Message}");
         }
     }
 
@@ -260,6 +311,8 @@ public class PdfProcessor
     {
         _db?.Dispose();
         _client?.Dispose();
+        _downloadThrottle?.Dispose();
+        _dbLock?.Dispose();
     }
 }
 

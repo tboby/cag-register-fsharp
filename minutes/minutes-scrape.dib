@@ -1,0 +1,247 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"}]}}
+
+#!csharp
+
+// Chunk 1: Install NuGet packages
+#r "nuget: HtmlAgilityPack, 1.11.54"
+#r "nuget: Microsoft.Data.Sqlite, 8.0.2"
+
+#!csharp
+
+// Chunk 2: Using statements
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading.Tasks;
+using HtmlAgilityPack;
+using System.Linq;
+using System.IO;
+using Microsoft.Data.Sqlite;
+
+#!csharp
+
+public class MinutesScraper
+{
+    private readonly HttpClient _client;
+    private const string BaseUrl = "https://www.hra.nhs.uk/about-us/committees-and-services/confidentiality-advisory-group/cag-group-meetings-and-minutes/";
+    private const string DbPath = "minutes.db";
+
+    public MinutesScraper()
+    {
+        _client = new HttpClient();
+        // Add user agent to avoid potential blocking
+        _client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+        InitializeDatabase();
+    }
+
+    private void InitializeDatabase()
+    {
+        using var connection = new SqliteConnection($"Data Source={DbPath}");
+        connection.Open();
+
+        // Create tables if they don't exist
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            CREATE TABLE IF NOT EXISTS years (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                year TEXT NOT NULL,
+                url TEXT NOT NULL,
+                type TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS minutes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                year_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (year_id) REFERENCES years (id)
+            );";
+        command.ExecuteNonQuery();
+    }
+
+    public string GetAbsoluteUrl(string relativeUrl)
+    {
+        if (string.IsNullOrEmpty(relativeUrl))
+            return string.Empty;
+
+        if (relativeUrl.StartsWith("http"))
+            return relativeUrl;
+
+        return new Uri(new Uri(BaseUrl), relativeUrl).ToString();
+    }
+
+    public async Task ScrapeMinutes()
+    {
+        try
+        {
+            // Get the main page content
+            var mainPageHtml = await _client.GetStringAsync(BaseUrl);
+            var doc = new HtmlDocument();
+            doc.LoadHtml(mainPageHtml);
+
+            using var connection = new SqliteConnection($"Data Source={DbPath}");
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // Find the section with year links (under "Minutes of previous CAG meetings")
+                var yearLinks = doc.DocumentNode
+                    .SelectNodes("//h2[contains(text(), 'Minutes of previous CAG meetings')]/following-sibling::ul[1]//a")
+                    ?.Select(a => new
+                    {
+                        Url = GetAbsoluteUrl(a.GetAttributeValue("href", "")),
+                        Year = a.InnerText.Trim(),
+                        Type = "regular"
+                    })
+                    .ToList();
+
+                // Also get precedent set minutes links
+                var precedentLinks = doc.DocumentNode
+                    .SelectNodes("//h2[contains(text(), 'Sub-committee and Precedent set minutes')]/following-sibling::ul[1]//a")
+                    ?.Select(a => new
+                    {
+                        Url = GetAbsoluteUrl(a.GetAttributeValue("href", "")),
+                        Year = a.InnerText.Trim(),
+                        Type = "precedent"
+                    })
+                    .ToList();
+
+                if ((yearLinks == null || !yearLinks.Any()) && (precedentLinks == null || !precedentLinks.Any()))
+                {
+                    Console.WriteLine("No links found!");
+                    return;
+                }
+
+                // Process regular minutes
+                if (yearLinks != null)
+                {
+                    foreach (var yearLink in yearLinks)
+                    {
+                        await ProcessYearPage(connection, yearLink.Url, yearLink.Year, yearLink.Type);
+                    }
+                }
+
+                // Process precedent set minutes
+                if (precedentLinks != null)
+                {
+                    foreach (var precedentLink in precedentLinks)
+                    {
+                        await ProcessYearPage(connection, precedentLink.Url, precedentLink.Year, precedentLink.Type);
+                    }
+                }
+
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error occurred: {ex.Message}");
+        }
+    }
+
+    private async Task ProcessYearPage(SqliteConnection connection, string url, string year, string type)
+    {
+        try
+        {
+            Console.WriteLine($"Processing {year}...");
+
+            // Insert year record and get its ID
+            using var yearCommand = connection.CreateCommand();
+            yearCommand.CommandText = @"
+                INSERT INTO years (year, url, type)
+                VALUES (@year, @url, @type)
+                RETURNING id;";
+            yearCommand.Parameters.AddWithValue("@year", year);
+            yearCommand.Parameters.AddWithValue("@url", url);
+            yearCommand.Parameters.AddWithValue("@type", type);
+            var yearId = (long)yearCommand.ExecuteScalar();
+
+            var yearPageHtml = await _client.GetStringAsync(url);
+            var yearDoc = new HtmlDocument();
+            yearDoc.LoadHtml(yearPageHtml);
+
+            // Find all PDF links in the content area
+            var minutesLinks = yearDoc.DocumentNode
+                .SelectNodes("//div[contains(@class, 'standard-page-body__content')]//a[contains(@href, '.pdf')]")
+                ?.Select(a => new
+                {
+                    Url = GetAbsoluteUrl(a.GetAttributeValue("href", "")),
+                    Title = a.InnerText.Trim()
+                })
+                .ToList();
+
+            if (minutesLinks != null && minutesLinks.Any())
+            {
+                // Insert minutes records
+                using var minutesCommand = connection.CreateCommand();
+                minutesCommand.CommandText = @"
+                    INSERT INTO minutes (year_id, title, url)
+                    VALUES (@yearId, @title, @url);";
+
+                foreach (var link in minutesLinks)
+                {
+                    minutesCommand.Parameters.Clear();
+                    minutesCommand.Parameters.AddWithValue("@yearId", yearId);
+                    minutesCommand.Parameters.AddWithValue("@title", link.Title);
+                    minutesCommand.Parameters.AddWithValue("@url", link.Url);
+                    minutesCommand.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"Found {minutesLinks.Count} minutes links for {year}");
+            }
+            else
+            {
+                Console.WriteLine($"No PDF links found for {year}");
+            }
+
+            // Add a small delay to be polite to the server
+            await Task.Delay(1000);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing {year}: {ex.Message}");
+            throw;
+        }
+    }
+
+    public void DisplayResults()
+    {
+        using var connection = new SqliteConnection($"Data Source={DbPath}");
+        connection.Open();
+
+        // Display summary by year
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT y.year, y.type, COUNT(m.id) as minutes_count
+            FROM years y
+            LEFT JOIN minutes m ON y.id = m.year_id
+            GROUP BY y.year, y.type
+            ORDER BY y.type, y.year DESC;";
+
+        using var reader = command.ExecuteReader();
+        Console.WriteLine("\nSummary of minutes found:");
+        Console.WriteLine("Year\tType\tCount");
+        Console.WriteLine("--------------------");
+        while (reader.Read())
+        {
+            Console.WriteLine($"{reader["year"]}\t{reader["type"]}\t{reader["minutes_count"]}");
+        }
+    }
+}
+
+#!csharp
+
+// Chunk 4: Create and run scraper
+var scraper = new MinutesScraper();
+await scraper.ScrapeMinutes();
+scraper.DisplayResults();

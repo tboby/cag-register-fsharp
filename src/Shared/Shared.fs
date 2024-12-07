@@ -59,7 +59,7 @@ type CagApplicationId = {
 type MinuteReference = {
     Title: string
     Url: string
-    PageRanges: string
+    PageRanges: string array
     ProcessedDate: DateTime
 }
 

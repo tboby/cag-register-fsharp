@@ -861,7 +861,7 @@ module ViewComponents =
                                                                     prop.children [
                                                                         Html.a [
                                                                             prop.className "text-blue-600 hover:text-blue-800"
-                                                                            prop.href minute.Url
+                                                                            prop.href (if minute.PageRanges.Length > 0 then $"{minute.Url}#page={minute.PageRanges.[0]}" else minute.Url)
                                                                             prop.target "_blank"
                                                                             prop.text minute.Title
                                                                         ]
@@ -873,7 +873,7 @@ module ViewComponents =
                                                                 ]
                                                                 Html.div [
                                                                     prop.className "text-sm text-gray-600 mt-1"
-                                                                    prop.text (sprintf "Pages: %s" minute.PageRanges)
+                                                                    prop.text (sprintf "Pages: %s" (String.concat ", " minute.PageRanges))
                                                                 ]
                                                             ]
                                                         ]

@@ -447,33 +447,6 @@ module CagRegisterXLSM =
         printfn "Returning %d display names for %A" (Map.count displayNames) registerType
         displayNames
 
-module MinutesDb =
-    open Microsoft.Data.Sqlite
-
-    let getRelatedMinutes (appId: CagApplicationId) =
-        use connection = new SqliteConnection("Data Source=minutes.db")
-        connection.Open()
-
-        use command = connection.CreateCommand()
-        command.CommandText <- """
-            SELECT m.title, m.url, c.PageRanges, c.ProcessedDate
-            FROM minutes m
-            JOIN CagReferences c ON m.url = c.PdfUrl
-            WHERE c.CagId = @appId
-            ORDER BY m.created_at DESC;
-        """
-        command.Parameters.AddWithValue("@appId", appId.ApplicationNumber) |> ignore
-
-        use reader = command.ExecuteReader()
-        [
-            while reader.Read() do
-                yield {
-                    Title = reader.GetString(0)
-                    Url = reader.GetString(1)
-                    PageRanges = reader.GetString(2)
-                    ProcessedDate = reader.GetDateTime(3)
-                }
-        ]
 
 module Storage =
     let todos =
@@ -527,7 +500,9 @@ let applicationsApi ctx = {
                         yield {
                             Title = reader.GetString(0)
                             Url = reader.GetString(1)
-                            PageRanges = reader.GetString(2)
+                            PageRanges = reader.GetString(2).Split(',')
+                                            |> Array.map (fun s -> s.Trim().Trim('p'))
+
                             ProcessedDate = new DateTime(reader.GetInt64(3))
                         }
                 ]

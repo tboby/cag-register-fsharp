@@ -54,6 +54,7 @@ public class CagReference
 public class PdfProcessor
 {
     private readonly SQLiteConnection _db;
+    private readonly string _dbPath;
     private readonly HttpClient _client;
     private readonly string _downloadDir;
     private readonly SemaphoreSlim _downloadThrottle = new SemaphoreSlim(3); // Max 3 concurrent downloads
@@ -62,6 +63,7 @@ public class PdfProcessor
     public PdfProcessor(string dbPath, string downloadDir)
     {
         _db = new SQLiteConnection(dbPath);
+        _dbPath = dbPath;
         _client = new HttpClient();
         _downloadDir = downloadDir;
         InitializeDatabase();
@@ -245,7 +247,7 @@ public class PdfProcessor
         Directory.CreateDirectory(_downloadDir);
 
         // Get all PDF minutes from the database
-        using var minutesDb = new SqliteConnection("Data Source=minutes.db");
+        using var minutesDb = new SqliteConnection($"Data Source={_dbPath}");
         minutesDb.Open();
 
         var command = minutesDb.CreateCommand();
@@ -320,7 +322,7 @@ public class PdfProcessor
 
 // Initialize and process
 var processor = new PdfProcessor(
-    dbPath: "cag_references.db",
+    dbPath: "minutes.db",
     downloadDir: "downloaded_pdfs"
 );
 

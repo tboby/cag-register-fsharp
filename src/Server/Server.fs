@@ -7,8 +7,20 @@ open OfficeOpenXml // Ensure you have this for EPPlus
 open System
 open System.IO
 open Microsoft.Data.Sqlite
+open Giraffe
+open Microsoft.AspNetCore.Http
 
+// Add this module for logging
+module Logger =
+    let logError (ex: exn) (ctx: HttpContext) =
+        let timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+        let path = ctx.Request.Path.ToString()
+        let errorMessage =
+            sprintf "[%s] Error in %s: %s\nStack trace: %s"
+                timestamp path ex.Message ex.StackTrace
 
+        eprintfn "%s" errorMessage
+        File.AppendAllText("server_errors.log", errorMessage + "\n\n")
 
 module CagRegisterXLSM =
     let getExcelLastModified (package: ExcelPackage) =
@@ -439,15 +451,15 @@ module MinutesDb =
     open Microsoft.Data.Sqlite
 
     let getRelatedMinutes (appId: CagApplicationId) =
-        use connection = new SqliteConnection("Data Source=cag_references.db")
+        use connection = new SqliteConnection("Data Source=minutes.db")
         connection.Open()
 
         use command = connection.CreateCommand()
         command.CommandText <- """
-            SELECT m.title, m.url, c.page_ranges, c.processed_date
+            SELECT m.title, m.url, c.PageRanges, c.ProcessedDate
             FROM minutes m
-            JOIN cag_references c ON m.url = c.pdf_url
-            WHERE c.cag_id = @appId
+            JOIN CagReferences c ON m.url = c.PdfUrl
+            WHERE c.CagId = @appId
             ORDER BY m.created_at DESC;
         """
         command.Parameters.AddWithValue("@appId", appId.ApplicationNumber) |> ignore
@@ -496,18 +508,18 @@ let applicationsApi ctx = {
         // Get related minutes for each application
         let appsWithMinutes =
             apps |> List.map (fun app ->
-                use connection = new SqliteConnection("Data Source=cag_references.db")
+                use connection = new SqliteConnection("Data Source=minutes.db")
                 connection.Open()
 
                 use command = connection.CreateCommand()
                 command.CommandText <- """
-                    SELECT m.title, m.url, c.page_ranges, c.processed_date
-                    FROM cag_references c
-                    JOIN minutes m ON m.url = c.pdf_url
-                    WHERE c.cag_id = @appId
+                    SELECT m.title, m.url, c.PageRanges, c.ProcessedDate
+                    FROM CagReferences c
+                    JOIN minutes m ON m.url = c.PdfUrl
+                    WHERE c.CagId = @appId
                     ORDER BY m.created_at DESC;
                 """
-                command.Parameters.AddWithValue("@appId", app.ApplicationNumber.ApplicationNumber) |> ignore
+                command.Parameters.AddWithValue("@appId", app.Reference) |> ignore
 
                 use reader = command.ExecuteReader()
                 let minutes = [
@@ -516,7 +528,7 @@ let applicationsApi ctx = {
                             Title = reader.GetString(0)
                             Url = reader.GetString(1)
                             PageRanges = reader.GetString(2)
-                            ProcessedDate = reader.GetDateTime(3)
+                            ProcessedDate = new DateTime(reader.GetInt64(3))
                         }
                 ]
                 { app with RelatedMinutes = minutes }
@@ -547,8 +559,15 @@ let webApp =
         forward "/ICagApplicationsApi" (Api.make applicationsApi)
     }
 
+open Microsoft.Extensions.Logging
 let app = application {
-    use_router (Api.make applicationsApi)
+    use_router (Api.make(
+        api = applicationsApi,
+        errorHandler = (fun ex _ ->
+            printfn "An error occurred processing your request: %s" ex.Message;
+            (Fable.Remoting.Server.Ignore)
+        )
+    ))
     memory_cache
     use_static "public"
     use_gzip

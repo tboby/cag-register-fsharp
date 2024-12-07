@@ -6,6 +6,7 @@ open Shared
 open OfficeOpenXml // Ensure you have this for EPPlus
 open System
 open System.IO
+open Microsoft.Data.Sqlite
 
 
 
@@ -246,6 +247,7 @@ module CagRegisterXLSM =
                     else if value = "No" then Some CPIValue.No
                     else Some (CPIValue.Other value)
                 ApplicationStatus = appStatus
+                RelatedMinutes = []
             }
             Some app
         with ex ->
@@ -433,6 +435,34 @@ module CagRegisterXLSM =
         printfn "Returning %d display names for %A" (Map.count displayNames) registerType
         displayNames
 
+module MinutesDb =
+    open Microsoft.Data.Sqlite
+
+    let getRelatedMinutes (appId: CagApplicationId) =
+        use connection = new SqliteConnection("Data Source=cag_references.db")
+        connection.Open()
+
+        use command = connection.CreateCommand()
+        command.CommandText <- """
+            SELECT m.title, m.url, c.page_ranges, c.processed_date
+            FROM minutes m
+            JOIN cag_references c ON m.url = c.pdf_url
+            WHERE c.cag_id = @appId
+            ORDER BY m.created_at DESC;
+        """
+        command.Parameters.AddWithValue("@appId", appId.ApplicationNumber) |> ignore
+
+        use reader = command.ExecuteReader()
+        [
+            while reader.Read() do
+                yield {
+                    Title = reader.GetString(0)
+                    Url = reader.GetString(1)
+                    PageRanges = reader.GetString(2)
+                    ProcessedDate = reader.GetDateTime(3)
+                }
+        ]
+
 module Storage =
     let todos =
         ResizeArray [
@@ -462,7 +492,37 @@ let todosApi ctx = {
 let applicationsApi ctx = {
     getApplications = fun registerType -> async {
         let apps = CagRegisterXLSM.getApplicationDetails registerType
-        return { RegisterType = registerType; Applications = apps }
+
+        // Get related minutes for each application
+        let appsWithMinutes =
+            apps |> List.map (fun app ->
+                use connection = new SqliteConnection("Data Source=cag_references.db")
+                connection.Open()
+
+                use command = connection.CreateCommand()
+                command.CommandText <- """
+                    SELECT m.title, m.url, c.page_ranges, c.processed_date
+                    FROM cag_references c
+                    JOIN minutes m ON m.url = c.pdf_url
+                    WHERE c.cag_id = @appId
+                    ORDER BY m.created_at DESC;
+                """
+                command.Parameters.AddWithValue("@appId", app.ApplicationNumber.ApplicationNumber) |> ignore
+
+                use reader = command.ExecuteReader()
+                let minutes = [
+                    while reader.Read() do
+                        yield {
+                            Title = reader.GetString(0)
+                            Url = reader.GetString(1)
+                            PageRanges = reader.GetString(2)
+                            ProcessedDate = reader.GetDateTime(3)
+                        }
+                ]
+                { app with RelatedMinutes = minutes }
+            )
+
+        return { RegisterType = registerType; Applications = appsWithMinutes }
     }
     getFrontPageEntries = fun registerType -> async {
         let entries = CagRegisterXLSM.getFrontPageEntries registerType

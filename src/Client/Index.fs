@@ -830,6 +830,59 @@ module ViewComponents =
                                 ]
                             ]
                         ]
+
+                        // Minutes Section
+                        Html.div [
+                            prop.className "mt-8"
+                            prop.children [
+                                Html.div [
+                                    prop.className "bg-gray-50 p-4 rounded-lg"
+                                    prop.children [
+                                        Html.h3 [
+                                            prop.className "text-xl font-semibold mb-4"
+                                            prop.text "Meeting Minutes References"
+                                        ]
+                                        match app.RelatedMinutes with
+                                        | [] ->
+                                            Html.div [
+                                                prop.className "text-gray-500 italic"
+                                                prop.text "No minutes references found"
+                                            ]
+                                        | minutes ->
+                                            Html.div [
+                                                prop.className "grid gap-4"
+                                                prop.children [
+                                                    for minute in minutes ->
+                                                        Html.div [
+                                                            prop.className "border-b pb-2"
+                                                            prop.children [
+                                                                Html.div [
+                                                                    prop.className "flex justify-between items-start"
+                                                                    prop.children [
+                                                                        Html.a [
+                                                                            prop.className "text-blue-600 hover:text-blue-800"
+                                                                            prop.href minute.Url
+                                                                            prop.target "_blank"
+                                                                            prop.text minute.Title
+                                                                        ]
+                                                                        Html.span [
+                                                                            prop.className "text-sm text-gray-500"
+                                                                            prop.text (minute.ProcessedDate.ToString("yyyy-MM-dd"))
+                                                                        ]
+                                                                    ]
+                                                                ]
+                                                                Html.div [
+                                                                    prop.className "text-sm text-gray-600 mt-1"
+                                                                    prop.text (sprintf "Pages: %s" minute.PageRanges)
+                                                                ]
+                                                            ]
+                                                        ]
+                                                ]
+                                            ]
+                                    ]
+                                ]
+                            ]
+                        ]
                     ]
                 ]
             ]

@@ -56,6 +56,13 @@ type CagApplicationId = {
     ApplicationNumber: string
 }
 
+type MinuteReference = {
+    Title: string
+    Url: string
+    PageRanges: string
+    ProcessedDate: DateTime
+}
+
 type CagApplication = {
     ApplicationNumber: CagApplicationId
     Reference: string
@@ -85,6 +92,7 @@ type CagApplication = {
     EnglishCPI: CPIValue option
     WelshCPI: CPIValue option
     ApplicationStatus: ApplicationStatus
+    RelatedMinutes: MinuteReference list
 }
 
 type CagFrontPageEntry = {

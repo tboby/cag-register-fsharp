@@ -12,6 +12,7 @@ nuget Feliz.Router
 nuget Microsoft.NET.Test.Sdk
 nuget SAFE.Server ~> 5
 nuget SAFE.Client ~> 5
+nuget Microsoft.Data.Sqlite
 
 nuget Fake.Core.Target ~> 5
 nuget Fake.IO.FileSystem ~> 5

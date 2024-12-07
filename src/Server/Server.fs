@@ -488,7 +488,7 @@ let applicationsApi ctx = {
                 command.CommandText <- """
                     SELECT m.title, m.url, c.PageRanges, c.ProcessedDate
                     FROM CagReferences c
-                    JOIN minutes m ON m.url = c.PdfUrl
+                    LEFT JOIN minutes m ON m.url = c.PdfUrl
                     WHERE c.CagId = @appId
                     ORDER BY m.created_at DESC;
                 """

@@ -430,13 +430,13 @@ module ViewComponents =
             ColumnDef.create [
                 ColumnDef.filter RowFilter.Text
                 ColumnDef.headerName "CAG Reference"
-                ColumnDef.width 180
+                ColumnDef.width 165
                 ColumnDef.valueGetter (fun (x : CagApplication) -> x.Reference)
             ]
             ColumnDef.create [
                 ColumnDef.filter RowFilter.Text
                 ColumnDef.headerName "App #"
-                ColumnDef.width 100
+                ColumnDef.width 90
                 ColumnDef.valueGetter (fun x -> x.ApplicationNumber.ApplicationNumber)
                 if registerType = NonResearch then
                     columnDefProp("sort", "desc")
@@ -489,7 +489,7 @@ module ViewComponents =
                 ColumnDef.create [
                     ColumnDef.filter RowFilter.Date
                     ColumnDef.headerName "Outcome Date"
-                    ColumnDef.width 150
+                    ColumnDef.width 120
                     ColumnDef.valueGetter (fun (x : CagApplication) -> x.OutcomeDate)
                     ColumnDef.valueFormatter (fun valueParams ->
                         match Option.flatten valueParams.value with
@@ -500,7 +500,7 @@ module ViewComponents =
             ColumnDef.create [
                 ColumnDef.filter RowFilter.Date
                 ColumnDef.headerName "Next Review Date"
-                ColumnDef.width 150
+                ColumnDef.width 120
                 ColumnDef.valueFormatter (fun valueParams ->
                     match Option.flatten valueParams.value with
                     | Some (date : DateTime) -> date.Format("yyyy-MM-dd")

@@ -534,9 +534,26 @@ module ViewComponents =
                                                      else minute.Url)
                                             prop.target "_blank"
                                             prop.title (sprintf "%s (Pages: %s)" minute.Title (String.concat ", " minute.PageRanges))
-                                            prop.text (sprintf "%s (%s)"
-                                                        (minute.ProcessedDate.ToString("yyyy-MM-dd"))
-                                                        (String.concat ", " minute.PageRanges))
+                                            prop.children [
+                                                Html.span [
+                                                    match minute.Type with
+                                                    | MinuteType.PrecedentSet ->
+                                                        prop.className "badge badge-warning mr-1"
+                                                        prop.text "PS"
+                                                    | MinuteType.Subcommittee ->
+                                                        prop.className "badge badge-info mr-1"
+                                                        prop.text "Sub"
+                                                    | MinuteType.Full ->
+                                                        prop.className "badge badge-success mr-1"
+                                                        prop.text "Full"
+                                                    | MinuteType.Other _ -> ()
+                                                ]
+                                                Html.span [
+                                                    prop.text (sprintf "%s"
+                                                        (Option.map (fun (d:DateTime) -> d.ToString("dd MMMM yyyy")) minute.MeetingDate
+                                                         |> Option.defaultValue "Unknown Date"))
+                                                ]
+                                            ]
                                         ]
                                 ]
                             ]

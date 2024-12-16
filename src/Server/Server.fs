@@ -570,7 +570,8 @@ let applicationsApi ctx = {
                             MeetingDate = MinuteParsing.parseDate title
                         }
                 ]
-                { app with RelatedMinutes = minutes }
+                let orderedMinutes = minutes |> List.sortBy (fun m -> m.MeetingDate)
+                { app with RelatedMinutes = orderedMinutes }
             )
 
         return { RegisterType = registerType; Applications = appsWithMinutes }

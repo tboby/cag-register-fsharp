@@ -8,7 +8,9 @@ open Feliz.AgGrid
 open Fable.DateFunctions
 open System
 open Feliz.Router
-
+        // Add this interface near the top of the file with other type definitions
+type IGetRowHeightParams =
+    abstract member data : CagApplication option
 let getDisplayNameFromApplication (app: CagApplication) =
     sprintf "%s: %s" app.ApplicationNumber.ApplicationNumber
         (let firstLine = app.Title.Split('\n').[0].Trim()
@@ -503,11 +505,44 @@ module ViewComponents =
                 ColumnDef.width 120
                 ColumnDef.valueFormatter (fun valueParams ->
                     match Option.flatten valueParams.value with
-                    | Some (date : DateTime) -> date.Format("yyyy-MM-dd")
+                    | Some (date : DateTime) -> date.ToString("yyyy-MM-dd")
                     | None -> "")
                 ColumnDef.valueGetter (fun (x : CagApplication) -> x.NextReviewDate)
             ]
-
+            ColumnDef.create [
+                ColumnDef.headerName "Minutes"
+                ColumnDef.width 200
+                ColumnDef.valueGetter (fun (x: CagApplication) -> x.RelatedMinutes)
+                ColumnDef.cellRenderer (fun cellParams ->
+                    match cellParams.data with
+                    | Some app ->
+                        match app.RelatedMinutes with
+                        | [] ->
+                            Html.div [
+                                prop.className "text-gray-500 italic"
+                                prop.text "No minutes"
+                            ]
+                        | minutes ->
+                            Html.div [
+                                prop.className "flex flex-col"
+                                prop.children [
+                                    for minute in minutes ->
+                                        Html.a [
+                                            prop.className "text-blue-600 hover:text-blue-800 truncate leading-tight py-0.5"
+                                            prop.href (if minute.PageRanges.Length > 0
+                                                     then $"{minute.Url}#page={minute.PageRanges.[0]}"
+                                                     else minute.Url)
+                                            prop.target "_blank"
+                                            prop.title (sprintf "%s (Pages: %s)" minute.Title (String.concat ", " minute.PageRanges))
+                                            prop.text (sprintf "%s (%s)"
+                                                        (minute.ProcessedDate.ToString("yyyy-MM-dd"))
+                                                        (String.concat ", " minute.PageRanges))
+                                        ]
+                                ]
+                            ]
+                    | None -> Html.none
+                )
+            ]
         ]), [| |]) // Empty dependencies array since these don't depend on props
 
         // Memoize row class rules
@@ -517,6 +552,8 @@ module ViewComponents =
                 | Some app when app.ApplicationStatus = Obsolete -> true
                 | _ -> false
             ) |}), [| |])
+
+
 
         Html.div [
             prop.className [
@@ -544,6 +581,15 @@ module ViewComponents =
                         ColumnDef.sortable true
                         ColumnDef.filter RowFilter.Text
                     ]
+                    agGridProp("rowHeight", 60)
+                    agGridProp("getRowHeight", fun (paramsA: IGetRowHeightParams) ->
+                        match paramsA.data with
+                        | Some app ->
+                            let minutesCount = app.RelatedMinutes.Length
+                            if minutesCount = 0 then 40  // Default height for no minutes
+                            else 25 * minutesCount  // Changed from 40 to 25 pixels per minute
+                        | None -> 40  // Default fallback height
+                    )
                     agGridProp("rowClassRules", rowClassRules)
                     AgGrid.columnDefs columnDefs
                     AgGrid.pagination true

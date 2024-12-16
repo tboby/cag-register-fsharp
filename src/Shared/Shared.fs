@@ -56,11 +56,20 @@ type CagApplicationId = {
     ApplicationNumber: string
 }
 
+[<RequireQualifiedAccess>]
+type MinuteType =
+    | PrecedentSet
+    | Subcommittee
+    | Full
+    | Other of string
+
 type MinuteReference = {
     Title: string
     Url: string
     PageRanges: string array
     ProcessedDate: DateTime
+    Type: MinuteType
+    MeetingDate: DateTime option  // Optional since we may not always be able to parse the date
 }
 
 type CagApplication = {

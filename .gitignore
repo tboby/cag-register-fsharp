@@ -21,3 +21,4 @@ release.sh
 src/Server/.~lock.cag-register-research-master-2021_1uhwQyX.xlsm#
 minutes/**/*.pdf
 minutes/**/*.db
+**/downloads/**/*pdf

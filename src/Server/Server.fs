@@ -552,7 +552,7 @@ let applicationsApi ctx = {
                     FROM CagReferences c
                     LEFT JOIN minutes m ON m.url = c.PdfUrl
                     WHERE c.CagId = @appId
-                    ORDER BY m.created_at DESC;
+                    ORDER BY m.CreatedAt DESC;
                 """
                 command.Parameters.AddWithValue("@appId", app.Reference) |> ignore
 

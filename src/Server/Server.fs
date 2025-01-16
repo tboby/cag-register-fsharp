@@ -543,7 +543,11 @@ let applicationsApi ctx = {
         // Get related minutes for each application
         let appsWithMinutes =
             apps |> List.map (fun app ->
-                use connection = new SqliteConnection("Data Source=minutes.db")
+
+                let file = Environment.GetEnvironmentVariable("CAG_REGISTER_DB_PATH")
+                        |> Option.ofObj
+                        |> Option.defaultValue "minutes.db"
+                use connection = new SqliteConnection($"Data Source={file}")
                 connection.Open()
 
                 use command = connection.CreateCommand()

@@ -552,7 +552,7 @@ let applicationsApi ctx = {
 
                 use command = connection.CreateCommand()
                 command.CommandText <- """
-                    SELECT m.title, m.url, c.PageRanges, c.ProcessedDate
+                    SELECT DISTINCT m.title, m.url, c.PageRanges, c.ProcessedDate
                     FROM CagReferences c
                     LEFT JOIN minutes m ON m.url = c.PdfUrl
                     WHERE c.CagId = @appId
@@ -561,8 +561,8 @@ let applicationsApi ctx = {
                 command.Parameters.AddWithValue("@appId", app.Reference) |> ignore
 
                 use reader = command.ExecuteReader()
-                let minutes = [
-                    while reader.Read() do
+                let minutes = 
+                    [ while reader.Read() do
                         let title = reader.GetString(0)
                         yield {
                             Title = title
@@ -573,9 +573,10 @@ let applicationsApi ctx = {
                             Type = MinuteParsing.parseMinuteType title
                             MeetingDate = MinuteParsing.parseDate title
                         }
-                ]
-                let orderedMinutes = minutes |> List.sortBy (fun m -> m.MeetingDate)
-                { app with RelatedMinutes = orderedMinutes }
+                    ]
+                    |> List.distinctBy (fun m -> m.Url)  // Remove any remaining duplicates
+                    |> List.sortBy (fun m -> m.MeetingDate)
+                { app with RelatedMinutes = minutes }
             )
 
         return { RegisterType = registerType; Applications = appsWithMinutes }

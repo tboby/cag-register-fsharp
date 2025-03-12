@@ -1,6 +1,8 @@
 module Index
 
 open Elmish
+open Fable.SimpleHttp
+open Fable.SimpleJson
 open SAFE
 open Shared
 open Feliz
@@ -68,9 +70,34 @@ let findQuery (segments: string list) : (string * string) list =
     |> function
         | Some parameters -> parameters
         | None -> []
+// Create a client-only implementation that reads from JSON files
+let inline loadFromJsonFile (endpoint: string) (registerType: RegisterType) : Async<'T> =
+            async {
+                let filePath = $"/api-responses/{endpoint}-{registerType}.json"
+                let! response = Http.get filePath
+                match response with
+                | 200, responseText ->
 
+                        let parsedJson = SimpleJson.parseNative responseText
+                        return Convert.fromJson parsedJson (createTypeInfo (typeof<'T>))
+                | _ -> return failwith $"failed to parse {endpoint}"
+
+            }
+let createLocalCagApi() : ICagApplicationsApi =
+    // Generic function to load JSON from file
+
+
+    // Return API implementation that loads from files
+    {
+        getApplications = loadFromJsonFile "getApplications"
+        getFrontPageEntries = loadFromJsonFile "getFrontPageEntries"
+        getDiscrepancies = loadFromJsonFile "getDiscrepancies"
+        getFileLoadResult = loadFromJsonFile "getFileLoadResult"
+        getApplicationDisplayNames = loadFromJsonFile "getApplicationDisplayNames"
+    }
 let applicationsApi =
-    Api.makeProxy<ICagApplicationsApi> ()
+    // Api.makeProxy<ICagApplicationsApi> ()
+    createLocalCagApi()
 let createShortTitle =
     function
     | TableContent -> "Applications (Research)"

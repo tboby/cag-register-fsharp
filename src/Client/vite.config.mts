@@ -17,6 +17,10 @@ export default defineConfig({
             "/api/": {
                 target: proxyTarget,
                 changeOrigin: true,
+            },
+            "/api-responses/": {
+                target: proxyTarget,
+                changeOrigin: true,
             }
         },
         watch: {

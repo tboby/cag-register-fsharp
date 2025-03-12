@@ -1,5 +1,7 @@
 module Server
 
+open Microsoft.AspNetCore.Builder
+open Microsoft.Extensions.FileProviders
 open SAFE
 open Saturn
 open Shared
@@ -561,7 +563,7 @@ let applicationsApi ctx = {
                 command.Parameters.AddWithValue("@appId", app.Reference) |> ignore
 
                 use reader = command.ExecuteReader()
-                let minutes = 
+                let minutes =
                     [ while reader.Read() do
                         let title = reader.GetString(0)
                         yield {
@@ -616,6 +618,17 @@ let app = application {
     memory_cache
     use_static "public"
     use_gzip
+    app_config (fun app ->
+        app.UseStaticFiles(
+            StaticFileOptions(
+                FileProvider = new PhysicalFileProvider(
+                    Path.Combine(Directory.GetCurrentDirectory(), "api-responses")
+                ),
+                RequestPath = PathString("/api-responses")
+            )
+        )
+    )
+
 }
 
 [<EntryPoint>]

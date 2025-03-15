@@ -26,12 +26,12 @@ Target.create "RestoreClientDependencies" (fun _ -> run npm [ "ci" ] ".")
 Target.create "Bundle" (fun _ ->
     [
         "server", dotnet [ "publish"; "-c"; "Release"; "-o"; deployPath ] serverPath
-        "client", dotnet [ "fable"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ] clientPath
+        "client", dotnet [ "fable"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build"; "--config"; "vite.config.local.mts" ] clientPath
     ]
     |> runParallel)
 
 Target.create "PublishClient" (fun _ ->
-        run dotnet [ "fable"; "--define"; "CSV"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ] clientPath
+        run dotnet [ "fable"; "--define"; "CSV"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ; "--config"; "vite.config.static.mts" ] clientPath
     )
 
 Target.create "Azure" (fun _ ->
@@ -54,7 +54,7 @@ Target.create "Run" (fun _ ->
 
     [
         "server", dotnet [ "watch"; "run" ] serverPath
-        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
+        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "--config"; "vite.config.local.mts" ] clientPath
     ]
     |> runParallel)
 
@@ -63,7 +63,7 @@ Target.create "RunCsv" (fun _ ->
 
     [
         "server", dotnet [ "watch"; "run"; "static" ] serverPath
-        "client", dotnet [ "fable"; "--define"; "CSV"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
+        "client", dotnet [ "fable"; "--define"; "CSV"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ; "--config"; "vite.config.local.mts"] clientPath
     ]
     |> runParallel)
 
@@ -72,7 +72,7 @@ Target.create "RunTests" (fun _ ->
 
     [
         "server", dotnet [ "watch"; "run" ] serverTestsPath
-        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientTestsPath
+        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ; "--config"; "vite.config.local.mts"] clientTestsPath
     ]
     |> runParallel)
 

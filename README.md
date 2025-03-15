@@ -1,48 +1,16 @@
-# SAFE Template
+# CAG Unofficial Registry
 
-This template can be used to generate a full-stack web application using the [SAFE Stack](https://safe-stack.github.io/). It was created using the dotnet [SAFE Template](https://safe-stack.github.io/docs/template-overview/). If you want to learn more about the template why not start with the [quick start](https://safe-stack.github.io/docs/quickstart/) guide?
+This project contains the source for the CAG registry browser found at https://cag.boby.uk.
 
-## Install pre-requisites
+This registry's data is sourced as follows:
 
-You'll need to install the following pre-requisites in order to build SAFE applications
+1. The latest Research and Non-Research excel documents are downloaded from the [official site](https://www.hra.nhs.uk/planning-and-improving-research/application-summaries/confidentiality-advisory-group-registers/).
+   1. The first sheet is processed, and an application created for each row
+   2. Every following sheet is processed, assuming a consistent format, and merged with the matching application ID
+2. All minutes (main, sub-committee, and precedent set) are located from the [official pages](https://www.hra.nhs.uk/about-us/committees-and-services/confidentiality-advisory-group/cag-group-meetings-and-minutes/).
+   1. Any new minutes are downloaded
+   2. Each PDF is scanned for "nn/CAG/nnnn", and a note made of each location
+   3. Each application has a link added for each location it was referenced in minutes, with a link to the source minutes PDF.
 
-* [.NET SDK](https://www.microsoft.com/net/download) 8.0 or higher
-* [Node 18](https://nodejs.org/en/download/) or higher
-* [NPM 9](https://www.npmjs.com/package/npm) or higher
+The data is (at time of writing) updated daily.
 
-## Starting the application
-
-To concurrently run the server and the client components in watch mode use the following command:
-
-```bash
-dotnet run
-```
-
-Then open `http://localhost:8080` in your browser.
-
-The build project in root directory contains a couple of different build targets. You can specify them after `--` (target name is case-insensitive).
-
-To run concurrently server and client tests in watch mode (you can run this command in parallel to the previous one in new terminal):
-
-```bash
-dotnet run -- RunTests
-```
-
-Client tests are available under `http://localhost:8081` in your browser and server tests are running in watch mode in console.
-
-Finally, there are `Bundle` and `Azure` targets that you can use to package your app and deploy to Azure, respectively:
-
-```bash
-dotnet run -- Bundle
-dotnet run -- Azure
-```
-
-## SAFE Stack Documentation
-
-If you want to know more about the full Azure Stack and all of it's components (including Azure) visit the official [SAFE documentation](https://safe-stack.github.io/docs/).
-
-You will find more documentation about the used F# components at the following places:
-
-* [Saturn](https://saturnframework.org/)
-* [Fable](https://fable.io/docs/)
-* [Elmish](https://elmish.github.io/elmish/)

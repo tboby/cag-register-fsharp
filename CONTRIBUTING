@@ -1,0 +1,33 @@
+﻿This app uses the SAFE stack.
+
+It started as a client/server combo, but then I wanted to make it statically hosted so now it's a weird hybrid.
+
+## Install pre-requisites
+
+You'll need to install the following pre-requisites in order to build SAFE applications
+
+* [.NET SDK](https://www.microsoft.com/net/download) 8.0 or higher
+* [Node 18](https://nodejs.org/en/download/) or higher
+* [NPM 9](https://www.npmjs.com/package/npm) or higher
+
+## Starting the application
+
+To concurrently run the server and the client components in watch mode use the following command:
+
+```bash
+dotnet run
+```
+
+Then open `http://localhost:8080` in your browser.
+
+The build project in root directory contains a couple of different build targets. You can specify them after `--` (target name is case-insensitive).
+
+To run concurrently server and client tests in watch mode (you can run this command in parallel to the previous one in new terminal):
+
+```bash
+dotnet run -- RunTests
+```
+
+Client tests are available under `http://localhost:8081` in your browser and server tests are running in watch mode in console.
+
+

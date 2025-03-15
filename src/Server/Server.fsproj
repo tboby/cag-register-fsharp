@@ -7,7 +7,10 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="Server.fs" />
+    <Compile Include="CagRegisterXLSM.fs" />
+    <Compile Include="MinuteParsing.fs" />
+      <Compile Include="ApplicationsApi.fs" />
+      <Compile Include="Server.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.fsproj" />

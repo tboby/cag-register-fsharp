@@ -7,10 +7,6 @@ on:
 
 jobs:
   build-and-deploy:
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,8 +32,14 @@ jobs:
       - name: Build project
         run: dotnet run PublishClient
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: deploy/public  # Change to your build output directory
-          branch: gh-pages
+          # upload entire directory
+          path: 'deploy/public'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

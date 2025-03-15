@@ -5,6 +5,9 @@ open Elmish.React
 open Fable.Core.JsInterop
 
 importSideEffects "./index.css"
+importAll "ag-grid-community/styles/ag-grid.css"
+importAll "ag-grid-community/styles/ag-theme-alpine.css"
+
 
 #if DEBUG
 open Elmish.HMR

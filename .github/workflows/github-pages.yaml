@@ -40,6 +40,7 @@ jobs:
           
       - name: Copy data files
         run: |
+          mkdir -p $GITHUB_WORKSPACE/main/deploy/public/api-responses
           cp $GITHUB_WORKSPACE/data/* $GITHUB_WORKSPACE/main/deploy/public/api-responses
       
       - name: Restore .NET tools

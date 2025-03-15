@@ -1,7 +1,11 @@
 ﻿module Server.ApplicationsApi
 
 open System
+open System.IO
+open System.Text
+open Fable.Remoting.Json
 open Microsoft.Data.Sqlite
+open Newtonsoft.Json
 open Shared
 
 
@@ -66,3 +70,45 @@ let applicationsApi ctx = {
         return { RegisterType = registerType; ApplicationDisplayNames = displayNames }
     }
 }
+
+module ToCsv =
+    let private fableConverter = new FableJsonConverter() :> JsonConverter
+
+    let private settings = JsonSerializerSettings(DateParseHandling = DateParseHandling.None)
+
+    let private fableSerializer =
+        let serializer = JsonSerializer()
+        serializer.Converters.Add fableConverter
+        serializer
+
+    let private jsonEncoding = UTF8Encoding false
+
+    let jsonSerialize (o: 'a) (stream: Stream) =
+        use sw = new StreamWriter (stream, jsonEncoding, 1024, true)
+        use writer = new JsonTextWriter (sw, CloseOutput = false)
+        fableSerializer.Serialize (writer, o)
+
+    let inline serializeOne (root: string) (api : Async<'a>) (filePath: string) = async {
+        let! result = api
+        use file = File.Create (Path.Combine(root, filePath))
+        jsonSerialize result file
+    }
+    let serializeAll (root: string) = async {
+        let api = applicationsApi ()
+        let serializeOne() : Async<'a> -> string -> Async<unit> = serializeOne root
+        do! serializeOne() (api.getApplicationDisplayNames Research) "getApplicationDisplayNames-Research.json"
+        do! serializeOne() (api.getApplicationDisplayNames NonResearch) "getApplicationDisplayNames-NonResearch.json"
+
+        do! serializeOne() (api.getApplications Research) "getApplications-Research.json"
+        do! serializeOne() (api.getApplications NonResearch) "getApplications-NonResearch.json"
+
+        do! serializeOne() (api.getDiscrepancies Research) "getDiscrepancies-Research.json"
+        do! serializeOne() (api.getDiscrepancies NonResearch) "getDiscrepancies-NonResearch.json"
+
+        do! serializeOne() (api.getFileLoadResult Research) "getFileLoadResult-Research.json"
+        do! serializeOne() (api.getFileLoadResult NonResearch) "getFileLoadResult-NonResearch.json"
+
+        do! serializeOne() (api.getFrontPageEntries Research) "getFrontPageEntries-Research.json"
+        do! serializeOne() (api.getFrontPageEntries NonResearch) "getFrontPageEntries-NonResearch.json"
+    }
+

@@ -1,5 +1,6 @@
 module Server.Server
 
+open System.IO
 open SAFE
 open Saturn
 open Server.ApplicationsApi
@@ -23,8 +24,21 @@ let app = application {
     use_gzip
 }
 
+let staticApp = application {
+    use_gzip
+    memory_cache
+    no_router
+    use_static ""
+}
+
 [<EntryPoint>]
-let main _ =
+let main args =
     ExcelPackage.LicenseContext <- LicenseContext.NonCommercial // Set the license context
-    run app
+    match args with
+    | [||] -> run app
+    | [|"generate"; rootOutput|] ->
+        Directory.CreateDirectory rootOutput |> ignore
+        ToCsv.serializeAll(rootOutput) |> Async.RunSynchronously
+    | [|"static"|] -> run staticApp
+    | _ -> failwithf "Unexpected args"
     0

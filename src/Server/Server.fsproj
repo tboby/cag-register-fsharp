@@ -15,5 +15,17 @@
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.fsproj" />
   </ItemGroup>
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="api-responses\getApplicationDisplayNames-NonResearch.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getApplicationDisplayNames-Research.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getApplications-NonResearch.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getApplications-Research.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getDiscrepancies-NonResearch.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getDiscrepancies-Research.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getFileLoadResult-NonResearch.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getFileLoadResult-Research.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getFrontPageEntries-NonResearch.json" />
+    <_ContentIncludedByDefault Remove="api-responses\getFrontPageEntries-Research.json" />
+  </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

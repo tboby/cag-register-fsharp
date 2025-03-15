@@ -58,7 +58,7 @@ Target.create "RunCsv" (fun _ ->
     run dotnet [ "build" ] sharedPath
 
     [
-        "static", dotnet [ "watch"; "run" ] staticPath
+        "server", dotnet [ "watch"; "run"; "static" ] serverPath
         "client", dotnet [ "fable"; "--define"; "CSV"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
     ]
     |> runParallel)

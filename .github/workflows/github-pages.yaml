@@ -38,10 +38,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: main/package-lock.json
           
-      - name: Copy data files
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/main/deploy/public/api-responses
-          cp $GITHUB_WORKSPACE/data/* $GITHUB_WORKSPACE/main/deploy/public/api-responses
       
       - name: Restore .NET tools
         run: dotnet tool restore
@@ -54,6 +50,11 @@ jobs:
       - name: Build project
         run: dotnet run PublishClient
         working-directory: main
+        
+      - name: Copy data files
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/main/deploy/public/api-responses
+          cp $GITHUB_WORKSPACE/data/* $GITHUB_WORKSPACE/main/deploy/public/api-responses
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

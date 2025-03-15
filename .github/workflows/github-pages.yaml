@@ -36,6 +36,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          working-directory: main
+          
       - name: Copy data files
         run: |
           cp $GITHUB_WORKSPACE/data/* $GITHUB_WORKSPACE/main/deploy/public/api-responses

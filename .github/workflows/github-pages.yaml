@@ -5,8 +5,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
   repository_dispatch:
-    types:
-      - recreate-site
+    types: [recreate_site]
     
 
 jobs:

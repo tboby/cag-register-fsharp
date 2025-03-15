@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          working-directory: main
+          cache-dependency-path: main/package-lock.json
           
       - name: Copy data files
         run: |

@@ -28,6 +28,7 @@ jobs:
         with:
           repository: tboby/cag-register-fsharp-data
           path: data
+          token: ${{ secrets.CAG_DATA_PAT }} # `GH_PAT` is a secret that contains your PAT
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:

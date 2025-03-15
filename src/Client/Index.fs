@@ -96,8 +96,11 @@ let createLocalCagApi() : ICagApplicationsApi =
         getApplicationDisplayNames = loadFromJsonFile "getApplicationDisplayNames"
     }
 let applicationsApi =
-    // Api.makeProxy<ICagApplicationsApi> ()
+#if CSV
     createLocalCagApi()
+#else
+    Api.makeProxy<ICagApplicationsApi> ()
+#endif
 let createShortTitle =
     function
     | TableContent -> "Applications (Research)"

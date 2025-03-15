@@ -10,6 +10,7 @@ initializeContext ()
 let sharedPath = Path.getFullName "src/Shared"
 let serverPath = Path.getFullName "src/Server"
 let clientPath = Path.getFullName "src/Client"
+let staticPath = Path.getFullName "src/StaticServer"
 let deployPath = Path.getFullName "deploy"
 let sharedTestsPath = Path.getFullName "tests/Shared"
 let serverTestsPath = Path.getFullName "tests/Server"
@@ -53,6 +54,15 @@ Target.create "Run" (fun _ ->
     ]
     |> runParallel)
 
+Target.create "RunCsv" (fun _ ->
+    run dotnet [ "build" ] sharedPath
+
+    [
+        "static", dotnet [ "watch"; "run" ] staticPath
+        "client", dotnet [ "fable"; "--define"; "CSV"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
+    ]
+    |> runParallel)
+
 Target.create "RunTests" (fun _ ->
     run dotnet [ "build" ] sharedTestsPath
 
@@ -70,6 +80,7 @@ let dependencies = [
     "Clean" ==> "RestoreClientDependencies" ==> "Bundle" ==> "Azure"
 
     "Clean" ==> "RestoreClientDependencies" ==> "Run"
+    "Clean" ==> "RestoreClientDependencies" ==> "RunCsv"
 
     "RestoreClientDependencies" ==> "RunTests"
 ]

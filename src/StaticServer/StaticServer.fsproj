@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="paket.references" />
+        <Compile Include="Program.fs"/>
+        <Content Include="api-responses\getFrontPageEntries-Research.json" />
+        <Content Include="api-responses\getFrontPageEntries-NonResearch.json" />
+        <Content Include="api-responses\getFileLoadResult-Research.json" />
+        <Content Include="api-responses\getFileLoadResult-NonResearch.json" />
+        <Content Include="api-responses\getDiscrepancies-Research.json" />
+        <Content Include="api-responses\getDiscrepancies-NonResearch.json" />
+        <Content Include="api-responses\getApplications-Research.json" />
+        <Content Include="api-responses\getApplications-NonResearch.json" />
+        <Content Include="api-responses\getApplicationDisplayNames-Research.json" />
+        <Content Include="api-responses\getApplicationDisplayNames-NonResearch.json" />
+        <Content Include="paket.references" />
+    </ItemGroup>
+    <Import Project="..\..\.paket\Paket.Restore.targets" />
+
+</Project>

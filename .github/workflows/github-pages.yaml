@@ -15,9 +15,6 @@ jobs:
       name: github-pages
       url: ${{steps.deployment.outputs.page_url}}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./main
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -45,12 +42,15 @@ jobs:
       
       - name: Restore .NET tools
         run: dotnet tool restore
+        working-directory: main
 
       - name: Install npm dependencies
         run: npm install
+        working-directory: main
 
       - name: Build project
         run: dotnet run PublishClient
+        working-directory: main
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # upload entire directory
-          path: 'deploy/public'
+          path: 'main/deploy/public'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

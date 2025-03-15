@@ -30,6 +30,10 @@ Target.create "Bundle" (fun _ ->
     ]
     |> runParallel)
 
+Target.create "PublishClient" (fun _ ->
+        run dotnet [ "fable"; "--define"; "CSV"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ] clientPath
+    )
+
 Target.create "Azure" (fun _ ->
     let web = webApp {
         name "SAFE-App"
@@ -78,6 +82,7 @@ open Fake.Core.TargetOperators
 
 let dependencies = [
     "Clean" ==> "RestoreClientDependencies" ==> "Bundle" ==> "Azure"
+    "Clean" ==> "RestoreClientDependencies" ==> "PublishClient"
 
     "Clean" ==> "RestoreClientDependencies" ==> "Run"
     "Clean" ==> "RestoreClientDependencies" ==> "RunCsv"

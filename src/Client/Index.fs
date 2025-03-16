@@ -527,6 +527,11 @@ module ViewComponents =
                         match Option.flatten valueParams.value with
                         | Some date -> date.Format("yyyy-MM-dd")
                         | None -> "")
+                    ColumnDef.comparator (fun a b ->
+                        let a = if a = "" then "0" else a
+                        let b = if b = "" then "0" else b
+                        compare a b
+                        )
                     columnDefProp("sort", "desc")
                 ]
             ColumnDef.create [
@@ -538,6 +543,11 @@ module ViewComponents =
                     | Some (date : DateTime) -> date.ToString("yyyy-MM-dd")
                     | None -> "")
                 ColumnDef.valueGetter (fun (x : CagApplication) -> x.NextReviewDate)
+                ColumnDef.comparator (fun a b ->
+                        let a = if a = "" then "0" else a
+                        let b = if b = "" then "0" else b
+                        compare a b
+                        )
             ]
             ColumnDef.create [
                 ColumnDef.headerName "Minutes"
@@ -642,6 +652,7 @@ module ViewComponents =
                     AgGrid.pagination true
                     AgGrid.paginationPageSize 10
                     AgGrid.domLayout DOMLayout.AutoHeight
+                    AgGrid.ensureDomOrder true
                     agGridProp("tooltipShowDelay", 200)
                 ]
             ]

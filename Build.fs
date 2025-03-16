@@ -63,7 +63,7 @@ Target.create "RunCsv" (fun _ ->
 
     [
         "server", dotnet [ "watch"; "run"; "static" ] serverPath
-        "client", dotnet [ "fable"; "--define"; "CSV"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ; "--config"; "vite.config.local.mts"] clientPath
+        "client", dotnet [ "fable"; "watch"; "--define"; "CSV"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ; "--config"; "vite.config.local.mts"] clientPath
     ]
     |> runParallel)
 

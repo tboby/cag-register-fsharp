@@ -1,5 +1,6 @@
 module Index
 
+open Browser
 open Elmish
 open Fable.SimpleHttp
 open Fable.SimpleJson
@@ -629,7 +630,7 @@ module ViewComponents =
                     ]
                 ]
                 AgGrid.grid [
-                    agGridProp("key", sprintf "applications-%A" registerType)
+                    AgGrid.key (sprintf "applications-%A" registerType)
                     agGridProp("gridId", sprintf "applications-%A" registerType)
                     agGridProp("id", sprintf "applications-%A" registerType)
                     AgGrid.rowData (apps |> Array.ofList)
@@ -650,7 +651,10 @@ module ViewComponents =
                     agGridProp("rowClassRules", rowClassRules)
                     AgGrid.columnDefs columnDefs
                     AgGrid.pagination true
-                    AgGrid.paginationPageSize 10
+                    if window.innerHeight > 1100 then
+                        AgGrid.paginationPageSize 20
+                    else
+                        AgGrid.paginationPageSize 10
                     AgGrid.domLayout DOMLayout.AutoHeight
                     AgGrid.ensureDomOrder true
                     agGridProp("tooltipShowDelay", 200)

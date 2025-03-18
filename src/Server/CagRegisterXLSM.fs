@@ -64,7 +64,8 @@ let findLatestExcelFile directory registerType =
 
     tryLoadFile sortedFiles []
 
-let mutable currentLoadResult = None
+let mutable currentResearchLoadResult = None
+let mutable currentNonResearchLoadResult = None
 
 let getRegisterFilePath registerType =
     let directory =
@@ -75,7 +76,9 @@ let getRegisterFilePath registerType =
 
     match findLatestExcelFile directory registerType with
     | Ok result ->
-        currentLoadResult <- Some { result with RegisterType = registerType }
+        match registerType with
+        | Research -> currentResearchLoadResult <- Some { result with RegisterType = registerType }
+        | NonResearch -> currentNonResearchLoadResult <- Some { result with RegisterType = registerType }
         Path.Combine(directory, result.LoadedFile)
     | Error failures ->
         failwithf "No valid Excel file found in directory. Tried files: %A" failures
@@ -398,7 +401,9 @@ let getDiscrepancies registerType =
     )
 
 let getCurrentLoadResult registerType =
-    currentLoadResult |> Option.filter (fun r -> r.RegisterType = registerType)
+    match registerType with
+    | Research -> currentResearchLoadResult
+    | NonResearch -> currentNonResearchLoadResult
 
 let getApplicationDisplayNames registerType =
     printfn "Getting display names for %A" registerType

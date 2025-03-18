@@ -67,6 +67,11 @@ Target.create "RunCsv" (fun _ ->
     ]
     |> runParallel)
 
+Target.create "Regenerate" (fun _ ->
+    run dotnet [ "build" ] serverPath
+    run dotnet [ "run"; "generate"; "api-responses" ] serverPath
+    )
+
 Target.create "RunTests" (fun _ ->
     run dotnet [ "build" ] sharedTestsPath
 

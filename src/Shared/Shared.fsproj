@@ -4,8 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Shared.fs" />
     <Content Include="paket.references" />
+    <Compile Include="Parsec.fs" />
+    <Compile Include="CagReference.fs" />
+      <Compile Include="Shared.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

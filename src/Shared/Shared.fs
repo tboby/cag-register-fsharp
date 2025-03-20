@@ -1,6 +1,7 @@
 namespace Shared
 
 open System
+open Shared.CagReference
 
 type Todo = { Id: Guid; Description: string }
 
@@ -56,6 +57,10 @@ type CagApplicationId = {
     ApplicationNumber: string
 }
 
+// type CagReference(reference : string) =
+
+    // member this.Year
+
 [<RequireQualifiedAccess>]
 type MinuteType =
     | PrecedentSet
@@ -74,7 +79,7 @@ type MinuteReference = {
 
 type CagApplication = {
     ApplicationNumber: CagApplicationId
-    Reference: string
+    Reference: CagReference
     OtherRefs: string option
     Title: string
     Summary: string
@@ -106,7 +111,7 @@ type CagApplication = {
 
 type CagFrontPageEntry = {
     ApplicationNumber: CagApplicationId
-    Reference: string
+    Reference: CagReference
     Title: string
     Status: string
     OutcomeDate: System.DateTime option

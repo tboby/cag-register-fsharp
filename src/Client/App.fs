@@ -6,7 +6,9 @@ open Fable.Core.JsInterop
 
 importSideEffects "./index.css"
 importAll "ag-grid-community/styles/ag-grid.css"
+importAll "ag-grid-community/styles/ag-theme-quartz.css"
 importAll "ag-grid-community/styles/ag-theme-alpine.css"
+importAll "ag-grid-community/styles/ag-theme-balham.css"
 
 // Import the function
 let provideGlobalGridOptions: obj -> unit = importMember "ag-grid-community"

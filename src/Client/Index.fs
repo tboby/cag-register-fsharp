@@ -11,6 +11,7 @@ open Feliz.AgGrid
 open Fable.DateFunctions
 open System
 open Feliz.Router
+open Shared.CagReference
         // Add this interface near the top of the file with other type definitions
 type IGetRowHeightParams =
     abstract member data : CagApplication option
@@ -465,11 +466,19 @@ module ViewComponents =
                 ColumnDef.headerName "CAG Reference"
                 ColumnDef.width 165
                 ColumnDef.valueGetter (fun (x : CagApplication) -> x.Reference)
+                ColumnDef.valueFormatter (fun cellParams ->
+                    match cellParams.data with
+                    | Some data -> data.Reference.raw
+                    | None -> ""
+                    )
+                ColumnDef.comparator (fun (a:CagReference) (b:CagReference) ->
+                    a.parsed.CompareToCustom(b.parsed)
+                    )
             ]
             ColumnDef.create [
                 ColumnDef.filter RowFilter.Text
                 ColumnDef.headerName "App #"
-                ColumnDef.width 90
+                ColumnDef.width 80
                 ColumnDef.valueGetter (fun x -> x.ApplicationNumber.ApplicationNumber)
                 if registerType = NonResearch then
                     columnDefProp("sort", "desc")
@@ -615,7 +624,7 @@ module ViewComponents =
 
         Html.div [
             prop.className [
-                "bg-white/80 rounded-md shadow-md p-4 ag-theme-alpine overflow-hidden"
+                "bg-white/80 rounded-md shadow-md p-4 ag-theme-quartz overflow-hidden"
                 if not isVisible then "hidden"
             ]
             prop.children [
@@ -639,6 +648,7 @@ module ViewComponents =
                         ColumnDef.sortable true
                         ColumnDef.filter RowFilter.Text
                     ]
+                    // AgGrid.enableCellTextSelection true
                     agGridProp("rowHeight", 60)
                     agGridProp("getRowHeight", fun (paramsA: IGetRowHeightParams) ->
                         match paramsA.data with
@@ -708,7 +718,7 @@ module ViewComponents =
                                 ]
                                 Html.div [
                                     Html.strong "Reference: "
-                                    Html.span app.Reference
+                                    Html.span app.Reference.raw
                                 ]
                                 Html.div [
                                     Html.strong "Status: "

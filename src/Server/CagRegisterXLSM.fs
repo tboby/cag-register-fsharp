@@ -4,6 +4,7 @@ open System
 open Shared
 open System.IO
 open OfficeOpenXml
+open Shared.CagReference
 
 let getExcelLastModified (package: ExcelPackage) =
     try
@@ -194,7 +195,7 @@ let parseApplication (sheet: ExcelWorksheet) (indexSheet: ExcelWorksheet) regist
         let cellRefs = getCellReferences registerType
         let app = {
             ApplicationNumber = { RegisterType = registerType; ApplicationNumber = appNo }
-            Reference = sheet.Cells.["B4"].Text
+            Reference = sheet.Cells.["B4"].Text |> (fun x ->  { raw = x; parsed =parseCagReference x})
             OtherRefs =
                 let refs = sheet.Cells.["B5"].Text // Use string access
                 if System.String.IsNullOrWhiteSpace(refs) then None else Some refs
@@ -310,7 +311,7 @@ let getFrontPageEntries registerType =
                 let isHidden = indexSheet.Row(row).Hidden
                 Some {
                     ApplicationNumber = { RegisterType = registerType; ApplicationNumber = appNo }
-                    Reference = indexSheet.Cells.[row, columns.Reference].Text
+                    Reference = indexSheet.Cells.[row, columns.Reference].Text |> (fun x -> { raw = x; parsed = parseCagReference x})
                     Title = indexSheet.Cells.[row, columns.Title].Text
                     Status = indexSheet.Cells.[row, columns.Status].Text
                     OutcomeDate =

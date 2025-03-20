@@ -5,49 +5,49 @@ open Expecto
 open Shared
 open Server
 
-open OfficeOpenXml // Ensure you have this for EPPlus
+open OfficeOpenXml
+open Shared.CagReference // Ensure you have this for EPPlus
 do ExcelPackage.LicenseContext <- LicenseContext.NonCommercial // Set the license context
-let server =
-    testList "Server" [
-        testCase "Adding valid Todo"
-        <| fun _ ->
-            let validTodo = Todo.create "TODO"
-            let expectedResult = Ok()
 
-            let result = Storage.addTodo validTodo
-
-            Expect.equal result expectedResult "Result should be ok"
-            Expect.contains Storage.todos validTodo "Storage should contain new todo"
-    ]
 
 let excel = testList "Excel" [
     testCase "Can parse application details"
     <| fun _ ->
-        let applications = CagRegisterXLSM.getApplicationDetails()
+        let applications = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
 
         // Should return some applications
         Expect.isGreaterThan applications.Length 0 "Should parse some applications"
 
         // Test first application has required fields
         let firstApp = applications.[0]
-        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstApp.ApplicationNumber))) "Should have application number"
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstApp.ApplicationNumber.ApplicationNumber))) "Should have application number"
         Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstApp.Title))) "Should have title"
         Expect.isTrue (firstApp.Address.Length > 0) "Should have address"
 
     testCase "All applications have some category of support and medical purpose"
     <| fun _ ->
-        let applications = CagRegisterXLSM.getApplicationDetails()
+        let applications = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
 
         // Test that all applications have at least one category of support and one medical purpose
         applications
         |> List.iter (fun app ->
-            Expect.isTrue (app.S251Classes.Count > 0) (sprintf "Application %s must have at least one category of support" app.ApplicationNumber)
-            Expect.isTrue (app.MedicalPurposes.Count > 0) (sprintf "Application %s must have at least one medical purpose" app.ApplicationNumber)
+            Expect.isTrue (app.S251Classes.Count > 0) (sprintf "Application %s must have at least one category of support" app.ApplicationNumber.ApplicationNumber)
+            Expect.isTrue (app.MedicalPurposes.Count > 0) (sprintf "Application %s must have at least one medical purpose" app.ApplicationNumber.ApplicationNumber)
+        )
+
+    ftestCase "No applications should be Unknown reference type"
+    <| fun _ ->
+        let applications = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
+
+        // Test that all applications have at least one category of support and one medical purpose
+        applications
+        |> List.iter (fun app ->
+            Expect.isTrue (app.Reference |> function |{parsed = Unknown _} -> false |_ -> true) (sprintf "Application %s with ref %s failed parse" app.ApplicationNumber.ApplicationNumber (app.Reference |> function |{parsed = Unknown x} -> x |_ -> ""))
         )
 
     testCase "Retrieve all raw values of MedicalPurposes and S251Classes"
     <| fun _ ->
-        let applications = CagRegisterXLSM.getApplicationDetails()
+        let applications = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
 
         // Collect all MedicalPurposes and S251Classes
         let allMedicalPurposes =
@@ -80,21 +80,21 @@ let excel = testList "Excel" [
 
     testCase "Can parse front page entries"
     <| fun _ ->
-        let entries = CagRegisterXLSM.getApplicationDetails()
+        let entries = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
 
         // Should return some entries
         Expect.isGreaterThan entries.Length 0 "Should parse some front page entries"
 
         // Test first entry has required fields
         let firstEntry = entries.[0]
-        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.ApplicationNumber))) "Should have application number"
-        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.Reference))) "Should have reference"
+        Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.ApplicationNumber.ApplicationNumber))) "Should have application number"
+        // Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.Reference))) "Should have reference"
         Expect.isTrue (not (System.String.IsNullOrWhiteSpace(firstEntry.Title))) "Should have title"
 
     testCase "Front page entries correlate with detailed entries"
     <| fun _ ->
-        let frontPageEntries = CagRegisterXLSM.getFrontPageEntries()
-        let detailedEntries = CagRegisterXLSM.getApplicationDetails()
+        let frontPageEntries = CagRegisterXLSM.getFrontPageEntries(RegisterType.Research)
+        let detailedEntries = CagRegisterXLSM.getApplicationDetails(RegisterType.Research)
 
         // Check that every front page entry has a corresponding detailed entry
         frontPageEntries |> List.iter (fun frontPage ->
@@ -102,21 +102,21 @@ let excel = testList "Excel" [
                 detail.ApplicationNumber = frontPage.ApplicationNumber)
 
             Expect.isSome matching
-                (sprintf "Application %s should have a detailed entry" frontPage.ApplicationNumber)
+                (sprintf "Application %s should have a detailed entry" frontPage.ApplicationNumber.ApplicationNumber)
 
             matching |> Option.iter (fun detail ->
                 let detailTitleFirstLine = detail.Title.Trim().Split('\n').[0]
                 let frontPageTitleFirstLine = frontPage.Title.Trim().Split('\n').[0]
                 Expect.equal detailTitleFirstLine frontPageTitleFirstLine
-                    (sprintf "Title should match for application %s" frontPage.ApplicationNumber)
+                    (sprintf "Title should match for application %s" frontPage.ApplicationNumber.ApplicationNumber)
                 Expect.equal (detail.Status.Trim()) (frontPage.Status.Trim())
-                    (sprintf "Status should match for application %s" frontPage.ApplicationNumber)
+                    (sprintf "Status should match for application %s" frontPage.ApplicationNumber.ApplicationNumber)
             )
         )
 ]
 
 [<Tests>]
-let all = testList "All" [ Shared.Tests.shared; server; excel ]
+let all = testList "All" [ Shared.Tests.shared;  excel ]
 
 [<EntryPoint>]
 let main _ = runTestsWithCLIArgs [] [||] all

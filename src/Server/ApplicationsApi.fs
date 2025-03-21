@@ -31,7 +31,7 @@ let applicationsApi ctx = {
                     WHERE c.CagId = @appId
                     ORDER BY m.CreatedAt DESC;
                 """
-                command.Parameters.AddWithValue("@appId", app.Reference) |> ignore
+                command.Parameters.AddWithValue("@appId", app.Reference.raw) |> ignore
 
                 use reader = command.ExecuteReader()
                 let minutes =

@@ -18,9 +18,12 @@ type CagReferenceParsed =
         | Unknown s -> 0
 
 
+    // Intended order from low to high is
+    // Cr, then PerMeeting, then PerYear
+    // And inside each, low is first by date
     member this.CompareToCustom other =
         match this, other with
-        | PerYearFormat(year, id), PerYearFormat(year1, id1) when year = year ->
+        | PerYearFormat(year, id), PerYearFormat(year1, id1) when year = year1 ->
             compare id id1
         | PerYearFormat(year, id), PerYearFormat(year1, id1) ->
             compare year year1
@@ -64,7 +67,7 @@ let oldFormatParser =
 
 let newFormatParser =
     pipe4
-        (pstring "CAG " >>. digit .>>. optional digit |>> string)
+        ((pstring "CAG " >>. digit .>>. opt digit) |>> ((function |(x, Some y) -> $"{x}{y}" |(x, _) -> $"{x}")))
         (pstring "-" >>. digits 2 .>> spaces)
         (optional (between (pstring "(") (pstring ")") (many1Satisfy (fun c -> c <> ')'))) |>> string)
         (pstring "/" >>. digits 4)
@@ -73,7 +76,7 @@ let newFormatParser =
 
 let applicationParser =
     pipe2
-        (pstring "CR" >>. digit .>>. optional digit |>> string)
+        (pstring "CR" >>. digit .>>. opt digit |>> ((function |(x, Some y) -> $"{x}{y}" |(x, _) -> $"{x}")))
         (pstring "/" >>. digits 4)
         (fun app year -> CrFormat(app |> int, year |> int))
 
